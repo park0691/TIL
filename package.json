@@ -1,0 +1,16 @@
+{
+  "name": "vuepress",
+  "version": "1.0.0",
+  "description": "depark's TIL blog",
+  "scripts": {
+    "dev": "vuepress dev docs",
+    "build": "vuepress build docs"
+  },
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "@vuepress/bundler-vite": "^2.0.0-rc.15",
+    "@vuepress/theme-default": "^2.0.0-rc.41",
+    "vuepress": "^2.0.0-rc.15"
+  }
+}
