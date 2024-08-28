@@ -27,6 +27,6 @@ export default defineUserConfig({
     ],
   }),
 
-  title: 'depark\'s TIL',
+  title: 'depark\'s note',
   base: '/TIL/'
 })
