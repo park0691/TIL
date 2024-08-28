@@ -10,7 +10,7 @@ export default defineUserConfig({
         text: 'Java',
         prefix: '/java/',
         children: [
-          'java-intro'
+          'class-loader'
         ],
       },
       {
