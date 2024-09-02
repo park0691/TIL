@@ -10,7 +10,8 @@ export default defineUserConfig({
         text: 'Java',
         prefix: '/java/',
         children: [
-          'class-loader'
+          'class-loader',
+          'functional-interface-lambda'
         ],
       },
       {
