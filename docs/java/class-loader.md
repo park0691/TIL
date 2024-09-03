@@ -103,14 +103,16 @@ App 클래스를 로더한 클래스 로더 `AppClassLoader`를 확인할 수 �
 
 [주요 클래스 로더]
 - ***Bootstrap Class Loader***
-    - 최상위 우선순위
+	- 최상위 우선순위
     - JVM 기동할 때 생성되며, Object 클래스들을 비롯한 표준 Java API를 로드한다.
         - `JAVA_HOME\lib`에 있는 코어 자바 API를 제공한다.
+	> *It is the virtual machine's built-in class loader, typically represented as null, and does not have a parent.*
     - 다른 클래스 로더와 달리 네이티브 코드로 구현되어, 자바 코드로 접근할 수 없다.
 - ***Platform Class Loader(Java 9부터), Extension Class Loader***
     - 기본 자바 API를 제외한 확장 클래스 로드. 보안 확장 기능 등을 로드
     - `JAVA_HOME\lib\ext` 폴더 또는 `java.ext.dirs` 시스템 변수 해당 위치의 클래스를 읽는다.
 - ***System Class Loader(Java 9부터), Application Class Loader***
+    
     - 애플리케이션 클래스 패스(애플리케이션 실행할 때 주는 `-classpath` 옵션 또는 `java.class.path` 환경 변수 값에 해당하는 위치)에서 클래스를 읽는다.
     - 개발자가 작성한 대부분의 클래스를 로딩한다.
 
@@ -178,8 +180,13 @@ App 클래스를 로더한 클래스 로더 `AppClassLoader`를 확인할 수 �
 
 ### Preparation
 
-- 클래스 필드, 메서드, 인터페이스 등의 자료구조와 static 변수를 위한 메모리를 할당한다.
-- 이 단계에서 static field가 만들어지고, 기본값으로 초기화된다. 코드에 작성한 원래 값은 Initialization 단계에서 할당되므로 아직은 초기화 블록, 초기화 코드가 실행되지는 않는다.
+- static fields(클래스 변수와 상수)를 위한 메모리를 할당하고, 기본 값으로 초기화한다.
+	- byte, short, int, long = 0
+	- float, double = 0.0
+	- char = '\u0000'
+	- boolean = false
+	- 레퍼런스 타입 = null
+- 코드에 작성한 원래 값은 Initialization 단계에서 할당되므로 아직은 초기화 블록, 초기화 코드가 실행되지는 않는다.
 
 ### Resolution
 
@@ -187,10 +194,11 @@ App 클래스를 로더한 클래스 로더 `AppClassLoader`를 확인할 수 �
 
 ## 3. Initialization
 - 클래스 변수들을 적절한 값으로 초기화한다.
-    - 클래스 파일의 코드를 읽어 코드에 명시된 원래 값을 static 변수에 할당하고, static 초기화 블록이 실행된다.
+    - 클래스 파일의 코드에 명시된 원래 값을 static 변수에 할당하고, static 초기화 블록이 실행된다.
 - 클래스 로더를 통한 탑재 과정이 끝나면 JVM은 클래스 파일을 구동시킬 준비를 마친다.
 
 ## References
+- https://docs.oracle.com/javase/specs/jls/se22/html/jls-12.html
 - https://velog.io/@ddangle/Java-%ED%81%B4%EB%9E%98%EC%8A%A4-%EB%A1%9C%EB%8D%94%EB%9E%80
 - https://medium.com/@gsy4568/jvm%EC%9D%98-%EC%B2%AB%EA%B4%80%EB%AC%B8-classloader-ecdf93d53a7b
 - https://velog.io/@ariul-dev/%EC%B0%A8%EA%B7%BC%EC%B0%A8%EA%B7%BC-%EC%95%8C%EC%95%84%EB%B3%B4%EB%8A%94-Java-%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%A8-%EC%8B%A4%ED%96%89-%EA%B3%BC%EC%A0%95
