@@ -17,7 +17,9 @@ export default defineUserConfig({
       {
         text: 'Database',
         prefix: '/database/',
-        children: [],
+        children: [
+          'transaction'
+        ],
       },
     ],
     navbar: [
