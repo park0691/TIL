@@ -10,7 +10,13 @@ export default defineUserConfig({
         text: 'Java',
         prefix: '/java/',
         children: [
-          'class-loader',
+          {
+            text: 'JVM, Java Virtual Machine',
+            children: [
+              'jvm-class-loader',
+              'jvm-runtime-data-area',
+            ],
+          },
           'functional-interface-lambda'
         ],
       },
