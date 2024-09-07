@@ -8,32 +8,120 @@ _출처 : https://inpa.tistory.com/entry/JAVA-%E2%98%95-JVM-%EB%82%B4%EB%B6%80-%
 
 ## Method Area
 
-- 실행 중인 프로그램의 메서드와 클래스 정보를 저장한다.
-  - 필드 및 메소드 데이터, Runtime Constant Pool과 같은 클래스의 구조 정보
-  - 정적 멤버 변수 (static), 상수 (static final) 포함
-  - 메서드, 생성자의 바이트 코드
+- 모든 스레드들이 공유하는 메모리 영역
+- 로드된 Type을 저장하는 논리적인 메모리 공간 (로드된 클래스, 인터페이스 정보 저장)
+	- Type이란 변수의 형으로도 사용하지만 메소드 영역에서는 Class, Interface를 의미
+	- Type의 바이트코드 뿐만 아니라 모든 변수, 상수, 레퍼런스, 메소드 데이터 등 포함
+	- Class, Instance, Interface의 초기화에 사용되는 클래스 변수, 메소드와 생성자 정보 포함
+- Class Loader에게 넘겨받은 클래스 파일에서 Type 관련 정보를 추출하여 저장한다.
+- JVM이 기동할 때 생성되며 GC의 대상이 된다.
 - JVM 벤더마다 다르게 구현되어 있다.
-  - Oracle Hotspot JVM의 Method Area는 JDK 7까지는 PermGen, JDK 8부터 Metaspace로 대체
-- 스레드 간 메모리를 공유한다.
-- 할당 시점 : JVM 시작할 때
-- 해제 시점 : JVM 종료될 때
+	- Oracle Hotspot JVM의 Method Area는 JDK 7까지는 PermGen, JDK 8부터 Metaspace로 대체
+- 실행 중인 프로그램의 메서드와 클래스 정보를 저장한다.
+    - 필드 및 메소드 데이터, Runtime Constant Pool과 같은 클래스의 구조 정보
+    - 정적 멤버 변수 (static), 상수 (static final) 포함
+    - 메서드, 생성자의 바이트 코드
+- 할당 시점 : 클래스 로더에 의해 클래스가 로드될 때
+- 해제 시점
+	- 클래스의 언로드(unload) 시점
+	- 클래스 로더가 더 이상 참조되지 않고, 클래스의 Instance 존재하지 않을 때 클래스의 메타 데이터는 GC될 수 있다. (Garbage Collector에 의해)
 
-### Runtime Constant Pool
+### Type Information
 
-  - 인스턴스 생성 시 참조하는 정보들을 상수로 보관한다.
-  - 클래스/인터페이스의 메서드, 필드, 문자 리터럴 등의 레퍼런스를 저장
-    - 즉, 어떤 메서드나 필드를 참조할 때 JVM은 Runtime Constant Pool을 통해 메서드, 필드의 실제 메모리의 레퍼런스를 참조한다.
+- `Package.class` 형태를 지니는 타입의 전체 이름 (Fully Qualified Name)
+- 타입의 슈퍼 클래스의 전체 이름
+	(타입이 인터페이스, Object 클래스 또는 슈퍼 클래스 없는 경우 제외됨)
+- 타입이 클래스인지 인터페이스인지 여부
+- 타입의 Modifier (public, abstract, final 등)
+- 인터페이스의 경우 직접 링크되는 객체의 리스트로 객체는 전체 이름(package.class)으로 표현됨
 
+### Constant Pool
+
+- Type의 모든 Constant 정보
+	- Constant는 단지 상수의 의미만을 가지는 리터럴 상수는 물론이고, 멤버 변수, 클래스 변수, 메소드로의 모든 Symbolic Reference를 저장
+
+::: warning Symbolic Reference
+객체를 참조할 때 Java 코드 상에 메모리 주소를 언급하지 않고 이름으로 객체를 참조한다. JVM은 참조 객체에 접근할 때 Constant Pool의 Symbolic Reference를 통해 해당 객체가 위치한 메모리 주소를 찾아 동적으로 연결한다.
+:::
+
+### Field Information
+
+- Type에서 선언된 모든 Field 정보
+    - Field의 이름, 데이터 타입, 선언된 순서
+    - Field의 Modifier (public, private, static, final, volatile, transient 등)
+- Field Information에 Field의 정보가 선언된 순서대로 기록된다.
+
+::: warning Field와 Variable
+Java에는 인스턴스 변수, 클래스 변수, 로컬 변수, 파라미터 4가지 종류의 변수가 있다. 그 중 Field는 인스턴스 변수, 클래스 변수를 의미한다. 이들은 각각 non-static field, static field로 표현된다. 나머지 로컬 변수, 파라미터 변수는 Method에 속한다.
+:::
+
+### Method Information
+
+- Type에서 선언된 모든 Method 정보
+    - 메소드의 이름, 리턴 타입
+    - 파라미터의 수와 데이터 타입, 선언된 순서
+    - Method의 Modifier (public, private, static, final, synchronized, native, abstract 등)
+- 만약 메소드가 native나 abstract 아닌 경우 다음 정보가 추가된다.
+    - Method의 바이트 코드
+    - Method Stack Frame의 Operand Stack, LocalVariable Section의 크기
+    - Exception Table
+
+### Class Variable
+
+- `static` 으로 선언된 모든 클래스 변수 정보
+- 모든 인스턴스에서 접근 가능하기 때문에 동기화 이슈가 발생할 수 있음
+- 클래스 변수를 `final`로 선언한 경우 `Constant Pool`에 저장
+
+::: warning Class와 Instance의 관계 (붕어빵 틀과 붕어빵)
+
+- Class(붕어빵 틀)<br/>
+	클래스가 로드되면 Java 코드에서 클래스 속성을 추출하여 Method Area에 기록한다. 이 클래스는 이러한 Method가 있고, 이 내용은 어떠하며 변수는 어떤 것을 가진다는 정보가 Metohd Area에 생성된다. 
+
+- Instance(붕어빵)<br/>
+	만약 이 클래스의 인스턴스를 생성한다면 Method Area의 클래스 정보를 바탕으로 Heap에 Object를 찍어낸다. 인스턴스 변수의 경우 Heap에 생성된 인스턴스에 그 값이 저장되고, 클래스 변수는 이 클래스 정보가 있는 Method Area의 Class Variable에 저장된다.
+:::
+
+### Reference to Class ClassLoader
+
+Type이 JVM에 로드될 때, <u>이 Type은 어떤 클래스 로더를 경유하여 로드되었는지 추적</u>한다. 한 Type이 다른 Type을 참조할 때 같은 클래스 로더를 사용하도록 되어 있기 때문이다.
+
+Type이 User-Defined ClassLoader를 통해 로딩된 경우 이 클래스 로더의 Reference를 Type 정보 중 하나로 저장한다. 반면 Bootstrap ClassLoader의 경우는 Reference를 `null`로 저장한다.
+
+이 정보는 Dynamic Linking할 때 해당 타입과 동일한 클래스 로더를 통해 참조하는 타입을 로딩하기 위해 사용된다.
+
+### Reference to Class class
+
+Type이 JVM에 로드되면 항상 `java.lang.class` 클래스의 인스턴스가 하나 생성된다. 그래서 Method Area에 Type 정보의 일부로 이 인스턴스의 레퍼런스를 저장한다. 우리가 `getName()`을 통해 클래스의 이름을 알아오거나 `isInterface()` 로 인터페이스 여부를 알 수 있는 것든 이 class 인스턴스의 Reference를 통하기 때문이다.
+
+### Method Table
+
+- Class의 메소드에 대한 Direct Reference를 갖는 자료구조 (메소드 호출을 위한 자료구조)
+	- JVM은 Method Table을 통해 Method Reference를 빠르게 수행할 수 있다.
+- Interface나 Abstract Class가 아닌 실체를 가진 Class 정보의 일부로, 해당 Class의 메소드 뿐만 아니라 Super Class에서 상속된 Method의 레퍼런스까지 포함한다.
+
+
+::: warning Class B가 Class A를 상속받은 경우, Class B에서 슈퍼 클래스 a2() 메서드를 참조한다면?
+
+![method table](/images/java/20240701-jvm-runtime-data-area-5.png)
+_출처 : Java Performance Fundamentals / 김한도 저_
+
+Class B의 인스턴스에서 Class B의 Method Area의 정보를 통해 해당 Method가 A를 상속 받았다는 것을 알게 되고 다시 Class A의 Method Area로 가서 적당한 인스턴스를 찾을 것이다.
+
+Method Table 있다면, Class B는 상속받은 메서드에 대한 Heap Instance 정보를 가지고 있기 때문에 이를 통해 Class A의 인스턴스를 바로 찾아갈 수 있다.
+
+즉, Method Table을 통해 Reference의 속도를 높일 수 있다.
+:::
 
 ## Heap
 
-- 동적으로 생성되는 객체의 인스턴스, 배열 등을 저장한다.
-- 스레드 간 메모리를 공유한다.
-- `Garbage Collection` 의 대상이다.
+- 동적으로 생성되는 객체의 인스턴스, Array를 저장하는 공간.
+- 모든 스레드들이 공유하는 메모리 영역
+- GC의 대상이다.
 - 할당 시점 : `new`로 인스턴스 또는 배열 생성 시
-- 해제 시점 : 객체가 더 이상 사용되지 않거나, 명시적으로 null 선언 시
+- 해제 시점 : 객체가 더 이상 사용되지 않거나, 명시적으로 `null` 할당될 때
+- JVM 벤더마다 다르게 구현되어 있다.
 
-### 구조
+### 구조 (Oracle Hostpot JVM 기준)
 
 #### Eden (Young Generation)
 
@@ -50,12 +138,12 @@ _출처 : https://inpa.tistory.com/entry/JAVA-%E2%98%95-JVM-%EB%82%B4%EB%B6%80-%
 #### Old Generation
 
 - Young Generation에서 오래 살아남은 객체가 저장되는 공간
+- Promotion : Young Generation에서 오래 살아남은 객체가 Old Generation으로 이동하는 것
 
-> **Young, Old로 왜 나누었을까?**
->
-> 대부분의 객체 수명이 짧으므로, 오래 살아남는 객체와 빨리 죽는 객체를 분리하여 처리하면 Garbage Collector의 메모리 스캔 범위를 줄일 수 있어 효율적이다.
-> <br/>세대를 나누면 Young Generation은 자주 GC 수행하여 짧은 수명의 객체를 빨리 정리할 수 있으며, Old Generation은 덜 빈번하게 GC 수행하여 메모리를 효율적으로 관리할 수 있다.
-> {: .prompt-warning }
+::: warning 왜 Young, Old로 나누었을까?
+대부분의 객체 수명이 짧으므로, 오래 살아남는 객체와 빨리 죽는 객체를 분리하여 처리하면 Garbage Collector의 메모리 스캔 범위를 줄일 수 있어 효율적이다.<br/>
+세대를 나누면 Young Generation은 자주 GC 수행하여 짧은 수명의 객체를 빨리 정리할 수 있으며, Old Generation은 덜 빈번하게 GC 수행하여 메모리를 효율적으로 관리할 수 있다.
+:::
 
 #### Permanent Generation (Java 8 이전)
 
