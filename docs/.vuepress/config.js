@@ -15,6 +15,7 @@ export default defineUserConfig({
             children: [
               'jvm-class-loader',
               'jvm-runtime-data-area',
+              'jvm-gc-algorithm'
             ],
           },
           'functional-interface-lambda'
