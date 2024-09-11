@@ -118,7 +118,8 @@ Method Table 있다면, Class B는 상속받은 메서드에 대한 Heap Instanc
 - 모든 스레드들이 공유하는 메모리 영역
 - GC의 대상이다.
 - 할당 시점 : `new`로 인스턴스 또는 배열 생성 시
-- 해제 시점 : 객체가 더 이상 사용되지 않거나, 명시적으로 `null` 할당될 때
+- 해제 시점
+	- 객체가 더 이상 레퍼런스되지 않을 때 GC의 대상이 되고, Garbage Collector에 의해 해제됨
 - JVM 벤더마다 다르게 구현되어 있다.
 
 ### 구조 (Oracle Hostpot JVM 기준)
@@ -145,38 +146,39 @@ Method Table 있다면, Class B는 상속받은 메서드에 대한 Heap Instanc
 세대를 나누면 Young Generation은 자주 GC 수행하여 짧은 수명의 객체를 빨리 정리할 수 있으며, Old Generation은 덜 빈번하게 GC 수행하여 메모리를 효율적으로 관리할 수 있다.
 :::
 
+### Permanent Generation to Metaspace
+PermGen은 JVM 시작 시 크기가 고정되며, 개발자가 임의로 메모리 크기를 직접 설정해서 관리했다. 많은 클래스를 로딩하는 경우 PermGen 공간이 부족하여 `java.lang.OutOfMemory` 에러 발생시켰다. 런타임에 메모리를 동적으로 늘리지도 못했다. Java 8부터 도입된 Metaspace는 PermGen과 달리 JVM 메모리 밖의 OS가 관리하는 Native Memory에 저장되며 크기가 동적으로 늘어난다. 이를 통해 메모리 부족 문제를 해결하였고 개발자의 메모리 설정 부담이 줄어들었다.
+
 #### Permanent Generation (Java 8 이전)
 
 ![Java 8 이전 PermGen](/images/java/20240701-jvm-runtime-data-area-1.png)
 _출처 : https://velog.io/@l_cloud/JDK%EB%A1%9C-%EA%B6%81%EA%B8%88%EC%A6%9D%EC%9D%84-%ED%95%B4%EA%B2%B0%ED%95%B4%EB%B3%B4%EC%9E%90_
 
 - 저장 정보
-  - 클래스, 메소드의 메타 데이터
-  - static 객체, 상수 (static final)
-  - 스트링 리터럴
-  - JVM 내부 객체들과 JIT 최적화 정보
-- 문제점 : 메모리 관리의 불편함
-  - 스트링 리터럴, static Collection 객체들이 쌓여 `java.lang.OutOfMemory` 에러 발생
+    - 클래스, 메소드의 메타 데이터
+    - static 객체, 상수 (static final)
+    - 스트링 리터럴
+    - JVM 내부 객체들과 JIT 최적화 정보
 
-> **메타 데이터**
->
-> 클래스의 구조, 메서드와 변수의 정보, 어노테이션 정보 등을 포함한 클래스와 관련된 정보를 말한다. JVM이 클래스를 로드하고 실행할 때 이 정보들을 참조한다.
-> {: .prompt-warning }
+::: tip 메타 데이터
+클래스의 구조, 메서드와 변수의 정보, 어노테이션 정보 등을 포함한 클래스와 관련된 정보를 말한다. JVM이 클래스를 로드하고 실행할 때 이 정보들을 참조한다.
+:::
 
 #### Metaspace (Java 8 이후)
 
 ![Java 8 이후 Metaspace](/images/java/20240701-jvm-runtime-data-area-2.png)
 _출처 : https://velog.io/@l_cloud/JDK%EB%A1%9C-%EA%B6%81%EA%B8%88%EC%A6%9D%EC%9D%84-%ED%95%B4%EA%B2%B0%ED%95%B4%EB%B3%B4%EC%9E%90_
 
-- Java 8 이전의 Permanent Generation은 Java 8부터 Metaspace로 변경
 - Native Memory 영역에 저장되어 OS에 의해 관리된다.
 - Permanent Generation의 OOM 에러 현상을 개선하기 위해 static 객체, 상수화된 static 객체를 Heap으로 이동시켜 GC의 대상이 되도록 변경하고, 메타 데이터 정보들을 OS가 관리하는 영역으로 옮겨 Permanent Generation의 사이즈 한계를 해결했다.
 - 저장 정보 변경 사항
-  - 클래스, 메소드의 메타 데이터 - `Metaspace`
-  - static 객체, 상수 (static final) - `Heap`
-  - 스트링 리터럴 - `Heap`
-  - JVM 내부 객체들과 JIT 최적화 정보 - `Metaspace`
-
+    - 클래스, 메소드의 메타 데이터 - `Metaspace`
+    - static 객체, 상수 (static final) - `Heap`
+    - 스트링 리터럴 - `Heap(String Pool)`
+    - JVM 내부 객체들과 JIT 최적화 정보 - `Metaspace`
+- Metaspace의 모니터링은 필요하다. 너무 지나치게 늘어나면 OS 전체의 메모리가 꽉 차서 서버 전체가 죽을 수도 있기 때문이다.
+	- MaxMetaspaceSize는 18,446,744,073,709,547,520Byte(약 16ExaByte) 로 Metaspsace는 디폴트로 OS가 제공 가능한만큼 늘어난다.
+	- `-XX:MaxMetaspaceSize=N` 옵션으로 최대 Metaspace를 설정할 수 있다.
 
 
 ## JVM Stack
@@ -285,3 +287,4 @@ Java는 플랫폼 독립적이지만, JVM도 OS / CPU 입장에선 CPU 위에서
 ## References
 - Java Performance Fundamentals / 김한도 저
 - https://d2.naver.com/helloworld/1230
+- gpt4o
