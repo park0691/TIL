@@ -284,6 +284,21 @@ Java는 플랫폼 독립적이지만, JVM도 OS / CPU 입장에선 CPU 위에서
 - 스레드가 Java Method를 수행하고 있다면 이 PC Register에는 <u>현재 수행 중인 JVM Instruction의 주소가 저장</u>된다. 만약 C언어로 Native Method(또는 Function)을 수행한다면 PC Register는 `undefined` 상태로 있게 된다. PC Register에 저장되는 Instruction의 주소는 Native Pointer 또는 Method Bytecode의 시작점일 수 있다.
 
 
+## Native Method Stack
+Java는 Java 외 언어로 작성된 프로그램, API 툴킷 등과의 통합을 위해 JNI(Java Native Interface) 표준 규약을 제공한다. 다시 말해 Java 프로그램 내에서 직접 Native Code로 되어 있는 Function을 호출할 수 있고, 그 결과 값을 받아올 수도 있다
+
+::: tip JNI(Java Native Interface)
+- 다른 언어로 작성된 프로그램과 Java가 상호 작용할 수 있는 인터페이스를 제공
+- JNI를 통해 바이트 코드로 전환하여 저장한다.
+:::
+
+Native Method Stack은 Native 코드를 위한 Stack 영역으로 JVM 내부에 영향을 주지 않기 위해 별도의 메모리 공간을 활용했다.
+
+Java Application에서 Native Method를 호출하면 Native Method Stack에 새로운 Stack Frame을 생성하고 PUSH하여 Native Function을 수행한다.
+
+Native Method Stack는 작성한 언어에 맞게 수행된다. Native 코드가 C이면 C Stack으로 생성, 수행되고 C++이면 C++ Stack이 생성되어 수행된다.
+
+
 ## References
 - Java Performance Fundamentals / 김한도 저
 - https://d2.naver.com/helloworld/1230
