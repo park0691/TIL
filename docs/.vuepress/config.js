@@ -19,6 +19,7 @@ export default defineUserConfig({
               'jvm-garbage-collector'
             ],
           },
+          'generics',
           'functional-interface-lambda'
         ],
       },
