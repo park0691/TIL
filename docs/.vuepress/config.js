@@ -20,6 +20,16 @@ export default defineUserConfig({
             ],
           },
           'generics',
+          {
+            text: 'Thread Programming',
+            children: [
+              'thread-runnable',
+              'thread-fork-join',
+              'thread-callable-future-executor',
+              'thread-completable-future'
+            ],
+          },
+          'reactive-programming-basic',
           'functional-interface-lambda'
         ],
       },
