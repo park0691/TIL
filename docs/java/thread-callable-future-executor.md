@@ -19,9 +19,9 @@ public interface Callable<V> {
 ## Future
 미래에 반환될 결과를 나타내는 인터페이스. Java 5에서 비동기 작업을 위해 도입되었다.
 
-가용 스레드가 없어서 실행이 미뤄지거나 작업 시간이 오래 걸리기 때문에 실행 결과를 바로 받지 못하고 미래에 얻게 될 수 있다. 미래 시점에 완료된 Callable의 반환 값을 구하기 위해 사용되는 것이 Future 인터페이스다.
+가용 스레드가 없어서 실행이 미뤄지거나 작업 시간이 오래 걸리기 때문에 실행 결과를 바로 받지 못하고 미래에 얻게 될 수 있다. 미래 시점에 완료될 Callable의 반환 값을 비동기로 구하기 위해 사용되는 것이 Future 인터페이스다.
 
-Future는 비동기 작업을 갖고 있어 미래 실행 결과를 얻도록 도와준다. 이를 위해 비동기 작업의 현재 상태를 확인하고 기다리며, 결과를 얻는 방법 등을 제공한다.
+이를 위해 비동기 작업의 현재 상태를 확인하고 기다리며, 결과를 얻는 방법 등을 제공한다.
 
 저수준의 스레드에 비해 직관적으로 이해하기 쉬운 장점이 있다.
 
@@ -209,13 +209,13 @@ Task was cancelled.
 
 
 ## Executor
-동시에 여러 요청을 처리해야 하는 경우 매번 새 스레드를 만드는 것은 비효율적이다. 스레드를 미리 만들어두고 재사용하기 위한 스레드 풀 개념이 등장하게 되었다. 이 인터페이스는 스레드 풀의 구현을 위한 인터페이스다.
+![executor](/images/java/20241003-thread-callable-future-executor-1.png)
+_출처 : https://geekrai.blogspot.com/2013/07/executor-framework-in-java.html_
 
+Executor는 인터페이스 분리 원칙(ISP)에 맞게 등록된 작업을 실행하는 책임만 갖는 인터페이스다. 따라서 전달받은 작업을 실행하는 `execute()` 메소드만 가진다.
+
+- Concurrent API의 최상위 인터페이스
 - 등록된 작업(`Runnable`)을 실행하기 위한 인터페이스
-- 작업 등록과 작업 실행 중에서 작업 실행만 책임진다.
-
-
-Executor 인터페이스는 인터페이스 분리 원칙(ISP)에 맞게 등록된 작업을 실행하는 책임만 갖는다. 따라서 전달받은 작업을 실행하는 메소드만 가진다.
 
 ```java
 public interface Executor {
@@ -225,16 +225,17 @@ public interface Executor {
 
 ## ExecutorService
 작업의 등록을 책임지는 인터페이스
-`Executor` 인터페이스를 상속받아서 작업 등록 뿐만 아니라 실행을 위한 책임도 가진다.
 
-그래서 스레드 풀은 기본적으로 `ExecutorService` 인터페이스를 구현한다. 대표적으로 ThreadPoolExecutor가 ExecutorService의 구현체인데, ThreadPoolExecutor 내부의 Blocking Queue에 작업을 등록한다. 그리고 각 작업들을 스레드 풀의 사용 가능한 스레드에 할당하여 작업을 수행한다. 만약 사용 가능한 스레드가 없다면 작업은 큐에서 대기하게 되고, 스레드가 작업이 끝나면 큐에 있는 다음 작업을 할당받는다.
+`Executor` 인터페이스를 상속받기 때문에 작업 등록뿐만 아니라 실행을 위한 책임도 가진다. 또한 작업의 생명주기를 관리하는 기능을 제공하며, `Runnable` 뿐만 아니라 `Callable` 스레드를 실행하는 `submit` 메서드도 제공한다.
+
+스레드 풀은 기본적으로 `ExecutorService` 인터페이스를 구현한다. 대표적으로 `ThreadPoolExecutor`가 `ExecutorService`의 구현체인데, `ThreadPoolExecutor` 내부의 Blocking Queue에 작업을 등록한다. 그리고 각 작업들을 스레드 풀의 사용 가능한 스레드에 할당하여 작업을 수행한다. 만약 사용 가능한 스레드가 없다면 작업은 큐에서 대기하게 되고, 스레드가 작업이 끝나면 큐에 있는 다음 작업을 할당받는다.
 
 ### 라이프사이클 관리 메소드
 
 | 메소드                                                | 설명                                                         |
 | ----------------------------------------------------- | ------------------------------------------------------------ |
-| void shutdown()                                       | - 새로운 작업들을 더 이상 받아들이지 않음 <br/>\- 호출 전에 제출된 작업들은 그대로 실행이 끝나고 종료된다.(Graceful Shutdown) |
-| List\<Runnable> shutdownNow()                          | - shutdown 기능에 더해 이미 제출된 작업들을 인터럽트시킴<br/>\- 실행을 위해 대기중인 작업 목록(List\<Runnable>)을 반환 |
+| void shutdown()                                       | - 새로운 작업들을 더 이상 받아들이지 않음 <br/>\- 호출 전에 제출된 작업들은 그대로 실행이 끝나고 종료됨(Graceful Shutdown) |
+| List\<Runnable> shutdownNow()                         | - shutdown 기능에 더해 이미 제출된 작업들을 인터럽트시킴(Abrupt Shutdown)<br/>\- 실행을 위해 대기중인 작업 목록(List\<Runnable>)을 반환 |
 | boolean isShutdown()                                  | - Executor의 shutdown 여부를 반환                            |
 | boolean isTerminated()                                | - shutdown 실행 후 모든 작업의 종료 여부를 반환              |
 | boolean awaitTermination(long timeout, TimeUnit unit) | - shutdown 실행 후, 지정한 시간 동안 모든 작업이 종료될 때 까지 대기함<br/>- 지정한 시간 내에 모든 작업이 종료되었는지 여부를 반환 |
@@ -244,10 +245,11 @@ Runnable, Callable 작업을 위한 메소드를 제공한다.
 
 | 메소드    | 설명                                                         |
 | --------- | ------------------------------------------------------------ |
-| submit    | - 실행할 작업들을 요청(Runnable, Callable 처리), 작업의 결과를 반환<br/>- 실행 즉시 Future 객체를 반환한다. 반환된 객체의 `get()` 메서드로 스레드의 작업 결과를 가져올 수 있다.<br />- 처리 중 예외 발생하면 스레드를 제거하지 않고 다음 작업에 재사용한다. |
+| submit    | - 실행할 작업들을 요청(Runnable, Callable 처리), 작업의 결과를 반환<br/>- 실행 즉시 Future 객체를 반환한다.<br />- 처리 중 예외 발생하면 스레드를 제거하지 않고 다음 작업에 재사용한다. |
 | execute   | - 실행할 작업들을 요청(Runnable만 처리), 작업의 결과를 반환하지 않는다.<br />- 처리 중 예외 발생하면 스레드 풀에서 해당 예외를 제거하고 새로운 스레드를 생성한다. |
 | invokeAll | - 모든 결과가 나올 때 까지 대기하는 블로킹 방식의 요청<br/>- 동시에 주어진 작업들을 모두 실행하고, 전부 끝나면 각각의 상태와 결과를 갖는 List\<Future>을 반환 |
 | invokeAny | - 가장 빨리 실행된 결과가 나올 때 까지 대기하는 블로킹 방식의 요청<br/>- 동시에 주어진 작업들을 모두 실행하고, 가장 빨리 완료된 하나의 결과를 Future로 반환 |
+
 
 ## Executors
 `Executor`, `ExecutorService`를 쉽게 사용할 수 있도록 돕는 유틸리티 클래스
@@ -267,3 +269,5 @@ Runnable, Callable 작업을 위한 메소드를 제공한다.
 ## References
 - https://javabom.tistory.com/96
 - https://hudi.blog/java-thread-pool/
+- https://devfunny.tistory.com/807
+- https://geekrai.blogspot.com/2013/07/executor-framework-in-java.html
