@@ -7,6 +7,18 @@ export default defineUserConfig({
   theme: defaultTheme({
     sidebar: [
       {
+        text: 'Book',
+        prefix: '/book/',
+        children: [
+          {
+            text: '토비의 스프링 3.1',
+            children: [
+              'toby-ch-06-aop'
+            ],
+          },
+        ]
+      },
+      {
         text: 'Java',
         prefix: '/java/',
         children: [
