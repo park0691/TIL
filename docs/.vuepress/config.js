@@ -46,6 +46,13 @@ export default defineUserConfig({
         ],
       },
       {
+        text: 'Spring',
+        prefix: '/spring/',
+        children: [
+          'aop'
+        ]
+      },
+      {
         text: 'Database',
         prefix: '/database/',
         children: [
