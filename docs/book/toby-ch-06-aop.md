@@ -32,36 +32,36 @@ DI 덕분에 구현 클래스는 얼마든지 외부에서 변경할 수 있다.
 
 ```java
 public class UserServiceTx implements UserService {
-		UserService userService;
-		PlatformTransactionManager transactionManager;
-	
-		public void setTransactionManager(
-				PlatformTransactionManager transactionManager) {
-				this.transactionManager = transactionManager;
-		}
-	
-		public void setUserService(UserService userService) {
-				this.userService = userService;
-		}
-	
-		public void add(User user) {
-				// UserService 오브젝트에 모든 기능을 위임
-				this.userService.add(user);
-		}
-	
-		public void upgradeLevels() {
-				TransactionStatus status = this.transactionManager
-						.getTransaction(new DefaultTransactionDefinition());
-				try {
-					// Business Logic (DI 받은 UserService 오브젝트에 모든 기능을 위임)
-					userService.upgradeLevels();
-		
-					this.transactionManager.commit(status);
-				} catch (RuntimeException e) {
-					this.transactionManager.rollback(status);
-					throw e;
-				}
-		}
+    UserService userService;
+    PlatformTransactionManager transactionManager;
+
+    public void setTransactionManager(
+        PlatformTransactionManager transactionManager) {
+        this.transactionManager = transactionManager;
+    }
+
+    public void setUserService(UserService userService) {
+        this.userService = userService;
+    }
+
+    public void add(User user) {
+        // UserService 오브젝트에 모든 기능을 위임
+        this.userService.add(user);
+    }
+
+    public void upgradeLevels() {
+        TransactionStatus status = this.transactionManager
+                .getTransaction(new DefaultTransactionDefinition());
+        try {
+            // Business Logic (DI 받은 UserService 오브젝트에 모든 기능을 위임)
+            userService.upgradeLevels();
+
+            this.transactionManager.commit(status);
+        } catch (RuntimeException e) {
+            this.transactionManager.rollback(status);
+            throw e;
+        }
+    }
 }
 ```
 
@@ -105,30 +105,30 @@ UserService의 `upgradeLevels()` 메소드를 실행시킨 후에 UserDao를 이
 
 ```java
 static class MockUserDao implements UserDao { 
-		private List<User> users;  // 레벨 업그레이드 후보 User 오브젝트 목록
-		private List<User> updated = new ArrayList(); // 업그레이드 대상 오브젝트
-		
-		private MockUserDao(List<User> users) {
-				this.users = users;
-		}
-	
-		public List<User> getUpdated() {
-				return this.updated;
-		}
-		// 스텁 기능 제공
-		public List<User> getAll() {  
-				return this.users;
-		}
-		// 목 오브젝트 기능 제공
-		// 넘겨준 업데이트 대상 user 오브젝트를 저장해뒀다가 검증을 위해 돌려주기 위한 것
-		public void update(User user) {  
-				updated.add(user);
-		}
-		
-		public void add(User user) { throw new UnsupportedOperationException(); }
-		public void deleteAll() { throw new UnsupportedOperationException(); }
-		public User get(String id) { throw new UnsupportedOperationException(); }
-		public int getCount() { throw new UnsupportedOperationException(); }
+    private List<User> users;  // 레벨 업그레이드 후보 User 오브젝트 목록
+    private List<User> updated = new ArrayList(); // 업그레이드 대상 오브젝트
+
+    private MockUserDao(List<User> users) {
+        this.users = users;
+    }
+
+    public List<User> getUpdated() {
+        return this.updated;
+    }
+    // 스텁 기능 제공
+    public List<User> getAll() {  
+        return this.users;
+    }
+    // 목 오브젝트 기능 제공
+    // 넘겨준 업데이트 대상 user 오브젝트를 저장해뒀다가 검증을 위해 돌려주기 위한 것
+    public void update(User user) {  
+        updated.add(user);
+    }
+
+    public void add(User user) { throw new UnsupportedOperationException(); }
+    public void deleteAll() { throw new UnsupportedOperationException(); }
+    public User get(String id) { throw new UnsupportedOperationException(); }
+    public int getCount() { throw new UnsupportedOperationException(); }
 }
 ```
 
@@ -187,33 +187,33 @@ Mockito 목 오브젝트는 다음의 네 단계를 거쳐서 사용하면 된�
 ```java
 @Test
 public void mockUpgradeLevels() throws Exception {
-		UserServiceImpl userServiceImpl = new UserServiceImpl();
-		// 목 오브젝트 생성과, 메소드의 리턴값 설정, DI
-		UserDao mockUserDao = mock(UserDao.class);	    
-		when(mockUserDao.getAll()).thenReturn(this.users);
-		userServiceImpl.setUserDao(mockUserDao);
-	
-		// 리턴 값이 없는 목 오브젝트 생성
-		MailSender mockMailSender = mock(MailSender.class);  
-		userServiceImpl.setMailSender(mockMailSender);
-	
-		userServiceImpl.upgradeLevels();
-	
-		// 목 오브젝트가 검증하는 검증 기능
-		// 메소드가 몇 번 호출됬는지, 파라미터는 무엇인지 확인
-		verify(mockUserDao, times(2)).update(any(User.class));				  
-		verify(mockUserDao, times(2)).update(any(User.class));
-		verify(mockUserDao).update(users.get(1));
-		assertThat(users.get(1).getLevel(), is(Level.SILVER));
-		verify(mockUserDao).update(users.get(3));
-		assertThat(users.get(3).getLevel(), is(Level.GOLD));
-	
-		ArgumentCaptor<SimpleMailMessage> mailMessageArg = ArgumentCaptor.forClass(SimpleMailMessage.class);
-		// 파라미터를 정밀하게 검사하기 위해 캡쳐
-		verify(mockMailSender, times(2)).send(mailMessageArg.capture());
-		List<SimpleMailMessage> mailMessages = mailMessageArg.getAllValues();
-		assertThat(mailMessages.get(0).getTo()[0], is(users.get(1).getEmail()));
-		assertThat(mailMessages.get(1).getTo()[0], is(users.get(3).getEmail()));
+    UserServiceImpl userServiceImpl = new UserServiceImpl();
+    // 목 오브젝트 생성과, 메소드의 리턴값 설정, DI
+    UserDao mockUserDao = mock(UserDao.class);	    
+    when(mockUserDao.getAll()).thenReturn(this.users);
+    userServiceImpl.setUserDao(mockUserDao);
+
+    // 리턴 값이 없는 목 오브젝트 생성
+    MailSender mockMailSender = mock(MailSender.class);  
+    userServiceImpl.setMailSender(mockMailSender);
+
+    userServiceImpl.upgradeLevels();
+
+    // 목 오브젝트가 검증하는 검증 기능
+    // 메소드가 몇 번 호출됬는지, 파라미터는 무엇인지 확인
+    verify(mockUserDao, times(2)).update(any(User.class));				  
+    verify(mockUserDao, times(2)).update(any(User.class));
+    verify(mockUserDao).update(users.get(1));
+    assertThat(users.get(1).getLevel(), is(Level.SILVER));
+    verify(mockUserDao).update(users.get(3));
+    assertThat(users.get(3).getLevel(), is(Level.GOLD));
+
+    ArgumentCaptor<SimpleMailMessage> mailMessageArg = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    // 파라미터를 정밀하게 검사하기 위해 캡쳐
+    verify(mockMailSender, times(2)).send(mailMessageArg.capture());
+    List<SimpleMailMessage> mailMessages = mailMessageArg.getAllValues();
+    assertThat(mailMessages.get(0).getTo()[0], is(users.get(1).getEmail()));
+    assertThat(mailMessages.get(1).getTo()[0], is(users.get(3).getEmail()));
 }	
 ```
 
@@ -235,7 +235,7 @@ public void mockUpgradeLevels() throws Exception {
 
 이렇게 마치 <u>클라이언트가 사용하려고 하는 실제 대상인 것처럼 위장해서 클라이언트의 요청을 받아주는 것을 대리자, 대리인과 같은 역할을 한다고 해서 프록시(proxy)</u>라 부른다. <u>프록시를 통해 최종적을 요청을 위임받아 처리하는 실제 오브젝트를 타깃(target) 또는 실체(real subject)</u>라 부른다.
 
-[프록시의 사용 목적]
+**[프록시의 사용 목적]**
 
 - 클라이언트가 타깃에 접근하는 방법을 제어
 - 타깃에 부가 기능을 부여
@@ -361,7 +361,7 @@ public class HelloUppercase implements Hello {
 
 Hello 인터페이스 구현 메소드에서는 타깃 오브젝트의 메소드를 호출한 뒤 결과를 대문자로 바꿔주는 부가 기능을 적용하고 리턴한다. 위임과 기능 부가라는 두 가지 프록시 기능을 모두 처리하는 전형적인 프록시 클래스다.
 
-[문제점]
+**[문제점]**
 
 - 인터페이스의 모든 메소드를 구현해 위임하도록 코드를 만들어야 하며
 - 부가 기능인 리턴 값을 대문자로 바꾸는 기능이 모든 메소드에 중복되서 나타난다.
@@ -374,7 +374,7 @@ Hello 인터페이스 구현 메소드에서는 타깃 오브젝트의 메소드
 
 프록시 팩토리에게 인터페이스 정보만 제공해주면 <u>해당 인터페이스를 구현한 클래스의 오브젝트를 자동으로 만들어주기 때문</u>에 프록시를 만들 때 인터페이스를 모두 구현해가면서 클래스를 정의하는 수고를 덜 수 있다.
 
-프록시로서 필요한 부가 기능 제공 코드는 **`*java.lang.reflect.InvocationHandler*`**를 구현한 오브젝트에 담는다.
+프록시로서 필요한 부가 기능 제공 코드는 **`java.lang.reflect.InvocationHandler`**를 구현한 오브젝트에 담는다.
 
 `invoke()` 메소드는 리플렉션의 메소드 인터페이스를 파라미터로 받는다.
 
@@ -407,13 +407,13 @@ public class UppercaseHandler implements InvocationHandler {
 
 ```java
 Hello proxiedHello = (Hello) Proxy.newProxyInstance(
-								// 동적으로 생성되는 다이나믹 프록시 클래스 로딩에 사용할 클래스 로더
-                getClass().getClassLoader(),
-                // 구현할 인터페이스
-                new Class[] { Hello.class },
-                // 부가 기능과 위임 코드를 담은 InvocationHandler
-                new UppercaseHandler(new HelloTarget())
-        );
+    // 동적으로 생성되는 다이나믹 프록시 클래스 로딩에 사용할 클래스 로더
+    getClass().getClassLoader(),
+    // 구현할 인터페이스
+    new Class[] { Hello.class },
+    // 부가 기능과 위임 코드를 담은 InvocationHandler
+    new UppercaseHandler(new HelloTarget())
+);
 ```
 
 ### 다이나믹 프록시의 확장
@@ -510,12 +510,12 @@ DI의 대상이 되는 다이나믹 프록시 오브젝트는 일반적인 스�
 import org.springframework.beans.factory.FactoryBean;
 
 public interface FactoryBean<T> {
-		// 빈 오브젝트를 생성해서 돌려준다.
-		T getObject() throws Exception;
-		// 생성되는 오브젝트의 타입을 알려준다.
-		Class<?> getObjectType();
-		// getObject()가 돌려주는 오브젝트가 싱글톤인지 알려준다.
-		default boolean isSingleton() { return true; }
+    // 빈 오브젝트를 생성해서 돌려준다.
+    T getObject() throws Exception;
+    // 생성되는 오브젝트의 타입을 알려준다.
+    Class<?> getObjectType();
+    // getObject()가 돌려주는 오브젝트가 싱글톤인지 알려준다.
+    default boolean isSingleton() { return true; }
 }
 ```
 
@@ -579,21 +579,21 @@ public class MessageFactoryBean implements FactoryBean {
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration
 public class FactoryBeanTest {
-		@Autowired
-		ApplicationContext context;
-		
-		@Test
-		public void getMessageFromFactoryBean() {
-				Object message = context.getBean("message");
-				assertThat(message, is(Message.class));
-				assertThat(((Message)message).getText(), is("Factory Bean"));
-		}
-		
-		@Test
-		public void getFactoryBean() throws Exception {
-				Object factory = context.getBean("&message");
-				assertThat(factory, is(MessageFactoryBean.class));
-		}
+    @Autowired
+    ApplicationContext context;
+
+    @Test
+    public void getMessageFromFactoryBean() {
+        Object message = context.getBean("message");
+        assertThat(message, is(Message.class));
+        assertThat(((Message)message).getText(), is("Factory Bean"));
+    }
+
+    @Test
+    public void getFactoryBean() throws Exception {
+        Object factory = context.getBean("&message");
+        assertThat(factory, is(MessageFactoryBean.class));
+    }
 }
 ```
 
@@ -654,7 +654,7 @@ TxFactoryBean 코드의 수정 없이 다양한 클래스에 적용할 수 있�
 
 ![image](/images/book/toby-ch-06-aop-8.png)
 
-데코레이터 패턴이 적용된 프록시의 문제점
+**[데코레이터 패턴이 적용된 프록시의 문제점]**
 
 - 프록시를 적용할 대상이 구현하고 있는 인터페이스를 구현하는 프록시 클래스를 일일히 만들어야 하는 번거로움
 
@@ -701,7 +701,7 @@ ProxyFactoryBean이 생성하는 프록시에서 사용할 부가기능은 Metho
 
 ```java
 public void simpleProxy() {
-		// JDK 다아내믹 프록시 생성
+	// JDK 다아내믹 프록시 생성
     Hello proxiedHello = (Hello)Proxy.newProxyInstance(
         getClass().getClassLoader(),
         new Class[] {Hello.class},
@@ -716,7 +716,7 @@ public void proxyFactoryBean() {
     // 부가 기능을 담은 어드바이스를 추가한다. 여러 개를 추가할 수도 있다.
     pfBean.addAdvice(new UppercaseAdvice());
 
-		// FactoryBean이므로 getObject()로 생성된 프록시를 가져온다.
+	// FactoryBean이므로 getObject()로 생성된 프록시를 가져온다.
     Hello proxiedHello = (Hello) pfBean.getObject();    
     System.out.println(proxiedHello.sayHello("Toby"));
     System.out.println(proxiedHello.sayHi("Toby"));
@@ -785,20 +785,20 @@ MethodInterceptor에는 재사용 가능한 순수 부가 기능 제공 코드�
 ```java
 @Test
 public void pointcutAdvisor() {
-		ProxyFactoryBean pfBean = new ProxyFactoryBean();
-		pfBean.setTarget(new HelloTarget());
-		
-		// 메소드 이름을 비교해서 대상을 선정하는 알고리즘을 제공하는 포인트컷
-		NameMatchMethodPointcut pointcut = new NameMatchMethodPointcut();
-		pointcut.setMappedName("sayH*"); 
-		
-		pfBean.addAdvisor(new DefaultPointcutAdvisor(pointcut, new UppercaseAdvice()));
-		
-		Hello proxiedHello = (Hello) pfBean.getObject();
-		
-		assertThat(proxiedHello.sayHello("Toby"), is("HELLO TOBY"));
-		assertThat(proxiedHello.sayHi("Toby"), is("HI TOBY"));
-		assertThat(proxiedHello.sayThankYou("Toby"), is("Thank You Toby")); 
+    ProxyFactoryBean pfBean = new ProxyFactoryBean();
+    pfBean.setTarget(new HelloTarget());
+
+    // 메소드 이름을 비교해서 대상을 선정하는 알고리즘을 제공하는 포인트컷
+    NameMatchMethodPointcut pointcut = new NameMatchMethodPointcut();
+    pointcut.setMappedName("sayH*"); 
+
+    pfBean.addAdvisor(new DefaultPointcutAdvisor(pointcut, new UppercaseAdvice()));
+
+    Hello proxiedHello = (Hello) pfBean.getObject();
+
+    assertThat(proxiedHello.sayHello("Toby"), is("HELLO TOBY"));
+    assertThat(proxiedHello.sayHi("Toby"), is("HI TOBY"));
+    assertThat(proxiedHello.sayThankYou("Toby"), is("Thank You Toby")); 
 }
 ```
 
@@ -877,10 +877,10 @@ target 프로퍼티를 제외하면 빈 클래스의 종류, 어드바이스, �
 package org.springframework.aop;
 
 public interface PointCut {
-		// 프록시를 적용할 클래스인지 확인해준다.
-		ClassFilter getClassFilter();
-		// 어드바이스를 적용할 메서드인지 확인해준다.
-		MethodMatcher getMethodMatcher();
+    // 프록시를 적용할 클래스인지 확인해준다.
+    ClassFilter getClassFilter();
+    // 어드바이스를 적용할 메서드인지 확인해준다.
+    MethodMatcher getMethodMatcher();
 }
 ```
 
@@ -906,14 +906,14 @@ public void classNamePointcutAdvisor() {
     };
     classMethodPointcut.setMappedName("sayH*");
 
-		// 적용 대상
+	// 적용 대상
     checkAdviced(new HelloTarget(), classMethodPointcut, true);
 
-		// 적용 대상 아님
+	// 적용 대상 아님
     class HelloWorld extends HelloTarget {};
     checkAdviced(new HelloWorld(), classMethodPointcut, false);
 
-		// 적용 대상
+	// 적용 대상
     class HelloToby extends HelloTarget {};
     checkAdviced(new HelloToby(), classMethodPointcut, true);
 }
@@ -924,7 +924,7 @@ private void checkAdviced(Object target, Pointcut pointcut, boolean adviced) {
     pfBean.addAdvisor(new DefaultPointcutAdvisor(pointcut, new UppercaseAdvice()));
     Hello proxiedHello = (Hello) pfBean.getObject();
 
-		// 적용 대상이면
+	// 적용 대상이면
     if (adviced) {
         assertThat(proxiedHello.sayHello("Toby"), is("HELLO TOBY"));
         assertThat(proxiedHello.sayHi("Toby"), is("HI TOBY"));
@@ -945,7 +945,7 @@ private void checkAdviced(Object target, Pointcut pointcut, boolean adviced) {
 ```java
 public class NameMatchClassMethodPointcut extends NameMatchMethodPointcut {
     public void setMappedClassName(String mappedClassName) {
-		    // 모든 클래스를 다 허용하는 디폴트 클래스 필터를 덮어씌운다.
+		// 모든 클래스를 다 허용하는 디폴트 클래스 필터를 덮어씌운다.
         this.setClassFilter(new SimpleClassFilter(mappedClassName));
     }
 
@@ -986,7 +986,7 @@ public class TransactionAdvice implements MethodInterceptor {
                 .getTransaction(new DefaultTransactionDefinition());
 
         try {
-		        //타겟 메서드 실행
+		    //타겟 메서드 실행
             Object ret = invocation.proceed();
             transactionManager.commit(status);
             return ret;
@@ -1153,35 +1153,35 @@ AspectJ 같은 고급 AOP 기술은 바이트코드 조작을 위해 JVM의 실�
 ### 6.5.6. AOP 용어
 
 - 타깃
-  부가기능을 부여할 대상
-  핵심기능을 담은 클래스일 수도 있지만 경우에 따라서는 다른 부가기능을 제공하는 프록시 오브젝트일 수도 있다.
+  - 부가기능을 부여할 대상
+  - 핵심기능을 담은 클래스일 수도 있지만 경우에 따라서는 다른 부가기능을 제공하는 프록시 오브젝트일 수도 있다.
 
 - 어드바이스
-  타깃에게 제공할 부가기능을 담은 모듈
-  오브젝트에서 정의하기도 하지만 메소드 레벨에서 정의할 수도 있다.
+  - 타깃에게 제공할 부가기능을 담은 모듈
+  - 오브젝트에서 정의하기도 하지만 메소드 레벨에서 정의할 수도 있다.
   MethodInterceptor 처럼 메소드 호출 과정 전반에 참여하는 것도 있지만, 예외 발생했을 때만 동작하는 어드바이스처럼 메소드 호출 과정의 일부에서만 동작하는 어드바이스도 있다.
 
 - 조인 포인트
-  어드바이스가 적용될 수 있는 위치
-  스프링 프록시 AOP에서 조인 포인트는 메소드 실행 단계 뿐이다. 타깃 오브젝트가 구현한 인터페이스의 모든 메소드는 조인 포인트가 된다.
+  - 어드바이스가 적용될 수 있는 위치
+  - 스프링 프록시 AOP에서 조인 포인트는 메소드 실행 단계 뿐이다. 타깃 오브젝트가 구현한 인터페이스의 모든 메소드는 조인 포인트가 된다.
 
 - 포인트컷
-  어드바이스를 적용할 조인 포인트를 선별하는 작업 또는 그 기능을 정의한 모듈
-  스프링 AOP의 조인 포인트는 메소드의 실행이므로, 스프링의 포인트컷은 메소드를 선정하는 기능을 갖고 있다.
+  - 어드바이스를 적용할 조인 포인트를 선별하는 작업 또는 그 기능을 정의한 모듈
+  - 스프링 AOP의 조인 포인트는 메소드의 실행이므로, 스프링의 포인트컷은 메소드를 선정하는 기능을 갖고 있다.
 
   (그래서 포인트컷 표현식은 메소드의 실행 의미인 execution으로 시작하고, 메소드의 시그니처를 비교하는 방법을 주로 이용한다. 메소느는 클래스 안에 존재하기 때문에 메소드 선정이란 결국 클래스를 선정하고 그 안의 메소드를 선정하는 과정을 거치게 된다.)
 
 - 프록시
-  클라이언트와 타깃 사이에 투명하게 준재하면서 부가기능을 제공하는 오브젝트
-  DI를 통해 타깃 대신 클라이언트에게 주입되며 클라이언트의 메소드 호출을 대신 받아서 타깃에 위임해주면서 그 과정에서 부가기능을 부여한다. 스프링은 프록시를 이용해 AOP를 지원한다.
+  - 클라이언트와 타깃 사이에 투명하게 준재하면서 부가기능을 제공하는 오브젝트
+  - DI를 통해 타깃 대신 클라이언트에게 주입되며 클라이언트의 메소드 호출을 대신 받아서 타깃에 위임해주면서 그 과정에서 부가기능을 부여한다. 스프링은 프록시를 이용해 AOP를 지원한다.
 
 - 어드바이저
-  포인트컷과 어드바이스를 하나씩 갖고 있는 오브젝트
-  어떤 부가기능(어드바이스)을 어디에(포인트컷) 전달할 것인가 알고 있는 AOP의 가장 기본이 되는 모듈이다. 스프링은 자동 프록시 생성기가 어드바이저를 AOP 작업의 정보로 활용한다. 어드바이저는 스프링 AOP에서만 특별히 사용되는 특별한 용어다.
+  - 포인트컷과 어드바이스를 하나씩 갖고 있는 오브젝트
+  - 어떤 부가기능(어드바이스)을 어디에(포인트컷) 전달할 것인가 알고 있는 AOP의 가장 기본이 되는 모듈이다. 스프링은 자동 프록시 생성기가 어드바이저를 AOP 작업의 정보로 활용한다. 어드바이저는 스프링 AOP에서만 특별히 사용되는 특별한 용어다.
 
 - 애스펙트
-  AOP의 기본 모듈
-  한 개 이상의 포인트컷과 어드바이스의 조합으로 만들어지며 보통 싱글톤 오브젝트로 존재한다.
+  - AOP의 기본 모듈
+  - 한 개 이상의 포인트컷과 어드바이스의 조합으로 만들어지며 보통 싱글톤 오브젝트로 존재한다.
 
 ### 6.5.7. AOP 네임스페이스
 
@@ -1190,16 +1190,16 @@ AspectJ 같은 고급 AOP 기술은 바이트코드 조작을 위해 JVM의 실�
 스프링 프록시 방식의 AOP를 적용하려면 최소한 네 가지 빈을 등록해야 한다.
 
 - 자동 프록시 생성기
-  스프링의 DefaultAdvisorAutoProxyCreator 클래스를 빈으로 등록한다. 다른 빈을 DI하지도 않고 자신도 DI되지 않으며, 독립적으로 존재한다.
+  - 스프링의 DefaultAdvisorAutoProxyCreator 클래스를 빈으로 등록한다. 다른 빈을 DI하지도 않고 자신도 DI되지 않으며, 독립적으로 존재한다.
 
 - 어드바이스
-  부가기능을 구현한 클래스를 빈으로 등록한다. TransactionAdvice는 AOP 관련 빈 중에서 유일하게 직접 구현한 클래스를 사용한다.
+  - 부가기능을 구현한 클래스를 빈으로 등록한다. TransactionAdvice는 AOP 관련 빈 중에서 유일하게 직접 구현한 클래스를 사용한다.
 
 - 포인트컷
-  스프링의 AspectJExpressionPointcut을 빈으로 등록하고, expression 프로퍼티에 포인트컷 표현식을 넣는다.
+  - 스프링의 AspectJExpressionPointcut을 빈으로 등록하고, expression 프로퍼티에 포인트컷 표현식을 넣는다.
 
 - 어드바이저
-  스프링의 DefaultPointcutAdvisor 클래스를 빈으로 등록한다. 자동 프록시 생성기에 의해 자동 검색되어 사용된다.
+  - 스프링의 DefaultPointcutAdvisor 클래스를 빈으로 등록한다. 자동 프록시 생성기에 의해 자동 검색되어 사용된다.
 
 ### AOP 네임스페이스
 
