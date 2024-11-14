@@ -33,21 +33,21 @@ _출처 : https://d2.naver.com/helloworld/1329_
 [단점]
 - 다른 GC 방식보다 메모리와 CPU를 더 많이 사용한다.
 	- GC 대상의 식별 작업이 복잡한 여러 단계로 수행, Concurrent 작업 수행되어 다른 GC 대비 오버헤드가 크다.
-- 반복된 Sweep으로 Heap의 단편화가 발생할 수 있다.
+- 반복된 Sweep으로 Heap의 단편화가 발생할 수 있다. (Compaction 수행하지 않으므로)
 	- Free List 사용하더라도 Young Generation의 오버헤드 증가
 - 애플리케이션과 병행하여 GC 수행하므로 가비지를 정확하게 수집하지 못하는 Floating Garbage가 발생할 수 있다.
 
 ### 동작 과정, Concurrent Mark-Sweep Algorithm
 1. Initial Mark<br/>
 	Root Set에서 직접 레퍼런스 되는 (가장 가까운) 객체만 찾아낸다.<br/>
-	싱글 스레드만 사용되는 Serial Phase이며, Heap은 Suspend 상태가 된다. 그러나 Root Set에서 직접 레퍼런스되는 객체만 찾아내기 때문에 Suspend 시간은 매우 짧다.
+	싱글 스레드만 사용되는 Serial Phase이며, <u>Heap은 Suspend 상태</u>가 된다. 그러나 Root Set에서 직접 레퍼런스되는 객체만 찾아내기 때문에 Suspend 시간은 매우 짧다.
 
 2. Concurrent Mark<br/>
 	앞 단계에서 직접 레퍼런스된 객체들을 따라가며 추적하여 레퍼런스되는 객체들을 찾아낸다.<br/>
 	싱글 스레드만 사용되는 Serial Phase이지만 다른 스레드들과 동시에 수행된다.
 
 3. Remark<br/>
-	유일한 Parallel Phase로 모든 스레드가 GC에 동원되기 때문에 애플리케이션은 잠시 중단된다. Concurrent Mark 단계에서 새로 추가되거나 참조가 끊긴 객체를 다시 확인한다. 이미 마킹된 Object를 다시 추적하여 Live 여부를 확정한다.
+	유일한 Parallel Phase로 모든 스레드가 GC에 동원되기 때문에 <u>애플리케이션은 잠시 중단</u>된다. Concurrent Mark 단계에서 새로 추가되거나 참조가 끊긴 객체를 다시 확인한다. 이미 마킹된 Object를 다시 추적하여 Live 여부를 확정한다.
 
 4. Concurrent Sweep<br/>
 	Serial Phase로 다른 스레드들이 실행되고 있는 상태에서 참조가 끊긴 객체의 할당을 해제한다. Sweep 작업만 수행할 뿐 Compaction 작업은 수행하지 않는다.
@@ -91,8 +91,10 @@ STW 시간을 최소화하면서 가능한 처리량을 높이는 것을 목표�
 - Java 9의 default GC
 - 큰 메모리에서 사용하기 적합한 GC, 대규모 Heap 사이즈에서 짧은 GC 시간을 보장한다.
 - 물리적인 Young / Old Generation 구분을 없애고 Heap을 균등한 Region으로 분할하고 각 Region에 동적으로 Eden, Survivor, Old 역할을 동적으로 부여한다.
+	- 더 이상 각 Generation을 구성하는 메모리를 연속해서 배치할 필요 없다.
 	- Suspend Time(STW)의 분산
 	- 런타임에 G1 GC가 필요에 따라 영역별 Region 개수를 튜닝한다. → STW 최소화
+	
 - Humongous Region의 추가
     - Region 크기의 1/2을 초과하는 객체를 저장
 
@@ -129,8 +131,8 @@ _출처 : https://www.oracle.com/technetwork/tutorials/tutorials-1876574.html_
     - G1 GC는 Old Region에서 여유 공간을 회수할지 결정할 수 있도록 정보를 계산한다. 이 계산은 Cleanup 단계에서 끝난다.
 
 - (Copying / ) Cleanup
-![g1-gc](/images/java/20240910-garbage-collector-7.png)
-_출처 : https://www.oracle.com/technetwork/tutorials/tutorials-1876574.html_
+  ![g1-gc](/images/java/20240910-garbage-collector-7.png)
+  _출처 : https://www.oracle.com/technetwork/tutorials/tutorials-1876574.html_
 
 	- STW 발생하며, Live Object 비율이 낮은 Region을 우선 해제하기 위해 해당 Region의 Live Object를 다른 영역으로 Evacuate(Copy)한 후 GC한다. → G1 GC는 Garbage가 많은 Region부터 정리하여 여유 공간을 신속하게 확보한다.
     - Space Reclamation Phase 수행할지 결정한다. (Old Region을 회수할지 결정) 이후 다시 Young Only Phase가 수행될 수도 있고, Space Reclamation Phase가 수행될 수도 있다.
