@@ -7,13 +7,19 @@ export default defineUserConfig({
   theme: defaultTheme({
     sidebar: [
       {
-        text: 'Book',
-        prefix: '/book/',
+        text: 'Book / Lecture',
+        prefix: '/book-lecture',
         children: [
           {
             text: '토비의 스프링 3.1',
             children: [
-              'toby-ch-06-aop'
+              'toby-spring/toby-ch-06-aop'
+            ],
+          },
+          {
+            text: 'Spring Security 6 완전 정복',
+            children: [
+              'spring-security-v6/section-02'
             ],
           },
         ]
