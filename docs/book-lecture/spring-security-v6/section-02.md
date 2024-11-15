@@ -4,6 +4,8 @@
 WebSecurity는 FilterChainProxy를 만드는 것이 목적이고, 그 안에는 SecurityFilterChain이 들어가야 한다. 이 필터들을 통해 클라이언트의 요청을 처리한다. 그 필터들은 HttpSecurity가 만들었다.
 
 HttpSecurity는 SecurityConfigurer 구현체를 통해 보안을 위한 각종 Filter를 만들고 만들어낸 여러 필터들을 담은 SecurityFilterChain을 만들어낸다.
+
+DelegatingFilterProxy는 스프링 컨테이너와 서블릿 사이의 연결 고리 역할을 하는 필터 클래스로 스프링 애플리케이션 컨텍스트를 찾아내고 FilterChainProxy를 읽어온다. 실제로 중요한 보안 역할을 하는 클래스는 FilterChainProxy
 :::
 
 ## 기본 보안을 위한 자동 설정
@@ -370,7 +372,8 @@ public final class CsrfConfigurer<H extends HttpSecurityBuilder<H>>
 	- false 반환 → 다른 필터 체인이나 처리 로직에 의해 처리되어야 함
 - 이를 통해 특정 요청에 대해 적절한 보안 필터링 로직이 적용될 수 있도록 한다.
 
-List\<Filter> getFilters()
+***List\<Filter> getFilters()***
+
 - 현재 SecurityFilterChain에 포함된 Filter 리스트를 반환한다.
 - 어떤 필터가 현재 필터 체인에 포함되어 있는지 확인할 수 있으며, 각 필터는 요청 처리 과정에서 특정 작업(인증, 권한 부여, 로깅 등)을 수행한다.
 
@@ -537,3 +540,142 @@ protected Filter performBuild() throws Exception {
 
 `FilterChainProxy filterChainProxy = new FilterChainProxy(securityFilterChains);`
 - 그리고 securityFilterChains 전달하여 FilterChainProxy을 생성하고 반환하여 빌드가 완료된다.
+
+
+## DelegatingFilterProxy, FilterChainProxy
+### DelegatingFilterProxy
+스프링 시큐리티는 모든 작업을 필터 기반으로 수행한다. 그러나 서블릿 필터는 스프링의 기능(DI, AOP 등) 사용할 수 없다.
+
+이 프록시를 통해 스프링에서 필터 타입의 클래스를 빈으로 생성하여 필터에 DI, AOP 등 스프링의 기능을 사용하기 위해 서블릿과 스프링 애플리케이션 컨텍스트 사이를 연결하는 다리 역할을 하도록 이 클래스를 설계했다.
+
+- 서블릿 컨테이너와 애플리케이션 컨텍스트 간의 연결고리 역할을 하는 <u>스프링에서 사용되는 특별한 필터</u>
+- 서블릿 필터의 기능을 수행하는 동시에 스프링 의존성 주입, 빈 관리 기능과 연동되도록 설계되었다.
+- `springSecurityFilterChain` 이름으로 생성된 빈을 애플리케이션 컨텍스트에서 찾아 요청을 위임한다.
+
+![image](/images/lecture/spring-security-s2-11.png)
+
+### FilterChainProxy
+- `springSecurityFilterChain`의 이름으로 생성되는 필터 빈으로서 DelegatingFilterProxy 로부터 요청을 위임 받고 보안 처리 역할을 한다.
+- 하나 이상의 SecurityFilterChain 객체들을 가지고 있으며 요청 URL 정보를 기준으로 적절한 SecurityFilterChain을 선택하여 필터를 호출한다.
+- HttpSecurity를 통해 API 추가 시 관련 필터들이 추가된다.
+- 사용자의 요청을 필터 순서대로 호출함으로 보안 기능을 동작시키고 필요 시 직접 필터를 생성해서 기존의 필터 전.후에 추가할 수 있다.
+
+**[DelegatingFilterProxy 생성]**
+
+```java
+@AutoConfiguration(after = SecurityAutoConfiguration.class)
+@ConditionalOnWebApplication(type = Type.SERVLET)
+@EnableConfigurationProperties(SecurityProperties.class)
+@ConditionalOnClass({ AbstractSecurityWebApplicationInitializer.class, SessionCreationPolicy.class })
+public class SecurityFilterAutoConfiguration {
+
+	private static final String DEFAULT_FILTER_NAME = AbstractSecurityWebApplicationInitializer.DEFAULT_FILTER_NAME;
+
+	@Bean
+	@ConditionalOnBean(name = DEFAULT_FILTER_NAME)
+	public DelegatingFilterProxyRegistrationBean securityFilterChainRegistration(
+			SecurityProperties securityProperties) {
+		DelegatingFilterProxyRegistrationBean registration = new DelegatingFilterProxyRegistrationBean(
+				DEFAULT_FILTER_NAME);
+         registration.setOrder(securityProperties.getFilter().getOrder());
+		registration.setDispatcherTypes(getDispatcherTypes(securityProperties));
+		return registration;
+	}
+```
+
+```java
+public abstract class AbstractSecurityWebApplicationInitializer implements WebApplicationInitializer {
+    private static final String SERVLET_CONTEXT_PREFIX = "org.springframework.web.servlet.FrameworkServlet.CONTEXT.";
+    public static final String DEFAULT_FILTER_NAME = "springSecurityFilterChain";
+```
+
+빈을 만들 때 'springSecurityFilterChain' 이름을 전달하는 것을 확인할 수 있다.
+
+```java
+public class DelegatingFilterProxyRegistrationBean extends AbstractFilterRegistrationBean<DelegatingFilterProxy>
+		implements ApplicationContextAware {
+    ...
+    @Override
+	public DelegatingFilterProxy getFilter() {
+		return new DelegatingFilterProxy(this.targetBeanName, getWebApplicationContext()) {
+
+			@Override
+			protected void initFilterBean() throws ServletException {
+				// Don't initialize filter bean on init()
+			}
+
+		};
+	}
+    ...
+```
+
+`this.targetBeanName = "springSecurityFilterChain"`으로 애플리케이션 컨텍스트에서 빈을 찾겠다.
+
+```java
+public abstract class AbstractFilterRegistrationBean<T extends Filter> extends DynamicRegistrationBean<Dynamic> {
+	...
+    @Override
+	protected Dynamic addRegistration(String description, ServletContext servletContext) {
+		Filter filter = getFilter();
+		return servletContext.addFilter(getOrDeduceName(filter), filter);
+	}
+	...
+```
+
+DelegatingFilterProxy 필터를 서블릿 컨테이너에 저장한다.
+
+**[DelegatingFilterProxy 동작]**
+
+```java
+public class DelegatingFilterProxy extends GenericFilterBean {
+    ...
+	@Override
+	public void doFilter(ServletRequest request, ServletResponse response, FilterChain filterChain)
+			throws ServletException, IOException {
+
+		// Lazily initialize the delegate if necessary.
+		Filter delegateToUse = this.delegate;
+		if (delegateToUse == null) {
+			this.delegateLock.lock();
+			try {
+				delegateToUse = this.delegate;
+				if (delegateToUse == null) {
+                      // 애플리케이션 컨텍스트 찾고 
+					WebApplicationContext wac = findWebApplicationContext();
+					if (wac == null) {
+						throw new IllegalStateException("No WebApplicationContext found: " +
+								"no ContextLoaderListener or DispatcherServlet registered?");
+					}
+                      // 애플리케이션 컨텍스트에서 FilterChainProxy 받아와
+					delegateToUse = initDelegate(wac);
+				}
+				this.delegate = delegateToUse;
+			}
+			finally {
+				this.delegateLock.unlock();
+			}
+		}
+
+		// Let the delegate perform the actual doFilter operation.
+		invokeDelegate(delegateToUse, request, response, filterChain);
+	}
+```
+
+애플리케이션 컨텍스트 찾고 → `initDelegate()` 호출
+
+```java
+public class DelegatingFilterProxy extends GenericFilterBean {
+    ...
+    protected Filter initDelegate(WebApplicationContext wac) throws ServletException {
+        String targetBeanName = getTargetBeanName();
+        Assert.state(targetBeanName != null, "No target bean name set");
+        Filter delegate = wac.getBean(targetBeanName, Filter.class);
+        if (isTargetFilterLifecycle()) {
+            delegate.init(getFilterConfig());
+        }
+        return delegate;
+    }
+```
+
+targetBeanName으로 <u>FilterChainProxy 빈 찾아온다</u>. 이후 `invokeDelegate()` 호출 → 실제 Security Filter 탄다.
+
