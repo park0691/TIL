@@ -679,3 +679,102 @@ public class DelegatingFilterProxy extends GenericFilterBean {
 
 targetBeanName으로 <u>FilterChainProxy 빈 찾아온다</u>. 이후 `invokeDelegate()` 호출 → 실제 Security Filter 탄다.
 
+
+## 사용자 정의 보안 설정
+- 한 개 이상의 SecurityFilterChain 타입의 빈을 정의한 후 인증 / 인가 API를 설정한다.
+
+![image](/images/lecture/spring-security-s2-12.png)
+
+**[SecurityConfig 클래스 생성]**
+
+```java
+// Spring Security 활성화. 웹 보안 설정.
+@EnableWebSecurity
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+        http.authorizeHttpRequests(auth-> auth.anyRequest().authenticated())
+                .formLogin(Customizer.withDefaults());
+        return http.build();
+    }
+}
+```
+- 모든 코드는 람다 형식으로 작성해야 한다. (시큐리티 7 버전부터 람다 형식만 지원 예정)
+- SecurityFilterChain을 빈으로 정의하면 자동설정에 의한 SecurityFilterChain 빈은 생성되지 않는다.
+
+```java
+class SpringBootWebSecurityConfiguration {
+	...
+	@ConditionalOnDefaultWebSecurity
+	static class SecurityFilterChainConfiguration {
+		@Bean
+		@Order(SecurityProperties.BASIC_AUTH_ORDER)
+		SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+```
+
+자동 설정에 의한 필터 체인 빈 선언부의 `@ConditionalOnDefaultWebSecurity`를 추적하면
+
+```java
+class DefaultWebSecurityCondition extends AllNestedConditions {
+	...
+	@ConditionalOnMissingBean({ SecurityFilterChain.class })
+	static class Beans {
+```
+
+SecurityFilterChain 빈이 없는 경우에만 디폴트 시큐리티 필터 체인이 생성되는 것을 확인할 수 있다.
+
+**[사용자 설정 추가]**
+(1) application.yml
+
+```
+spring:
+  security:
+    user:
+      name: user
+      password: 1234
+      roles: USER
+```
+
+(2) 자바 설정 클래스에 빈 생성
+```java
+@Bean
+public InMemoryUserDetailsManager inMemoryUserDetailsManager() {
+    UserDetails user = User.withUsername("user")
+            .password("{noop}1234")
+            .authorities("ROLE_USER")
+            .build();
+    UserDetails user2 = User.withUsername("user2")
+            .password("{noop}1234")
+            .authorities("ROLE_USER")
+            .build();
+    UserDetails user3 = User.withUsername("user3")
+            .password("{noop}1234")
+            .authorities("ROLE_USER")
+            .build();
+    return new InMemoryUserDetailsManager(user, user2, user3);
+}
+```
+
+```java
+@Bean
+public UserDetailsService userDetailsService() {
+    UserDetails user = User.withUsername("user")
+            .password("{noop}1234")
+            .authorities("USER")
+            .build();
+    UserDetails user2 = User.withUsername("user2")
+            .password("{noop}1234")
+            .authorities("USER")
+            .build();
+    UserDetails user3 = User.withUsername("user3")
+            .password("{noop}1234")
+            .authorities("USER")
+            .build();
+    return new InMemoryUserDetailsManager(user, user2, user3);
+}
+```
+
+- `.password("{noop}1234")` : {noop)는 비밀번호 인코딩을 하지 않음을 의미
+- yml 설정과 Config 빈 설정이 중복되면 Config 빈 설정이 우선순위가 높다.
