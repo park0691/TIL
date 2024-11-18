@@ -62,7 +62,8 @@ export default defineUserConfig({
         text: 'Database',
         prefix: '/database/',
         children: [
-          'transaction'
+          'transaction',
+          'index'
         ],
       },
     ],
