@@ -19,7 +19,8 @@ export default defineUserConfig({
           {
             text: 'Spring Security 6 완전 정복',
             children: [
-              'spring-security-v6/section-02'
+              'spring-security-v6/section-02',
+              'spring-security-v6/section-03'
             ],
           },
         ]
