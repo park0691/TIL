@@ -544,6 +544,8 @@ protected Filter performBuild() throws Exception {
 
 ## DelegatingFilterProxy, FilterChainProxy
 ### DelegatingFilterProxy
+![image](/images/lecture/spring-security-s2-11.png)
+
 스프링 시큐리티는 모든 작업을 필터 기반으로 수행한다. 그러나 서블릿 필터는 스프링의 기능(DI, AOP 등) 사용할 수 없다.
 
 이 프록시를 통해 스프링에서 필터 타입의 클래스를 빈으로 생성하여 필터에 DI, AOP 등 스프링의 기능을 사용하기 위해 서블릿과 스프링 애플리케이션 컨텍스트 사이를 연결하는 다리 역할을 하도록 이 클래스를 설계했다.
@@ -552,13 +554,18 @@ protected Filter performBuild() throws Exception {
 - 서블릿 필터의 기능을 수행하는 동시에 스프링 의존성 주입, 빈 관리 기능과 연동되도록 설계되었다.
 - `springSecurityFilterChain` 이름으로 생성된 빈을 애플리케이션 컨텍스트에서 찾아 요청을 위임한다.
 
-![image](/images/lecture/spring-security-s2-11.png)
 
 ### FilterChainProxy
-- `springSecurityFilterChain`의 이름으로 생성되는 필터 빈으로서 DelegatingFilterProxy 로부터 요청을 위임 받고 보안 처리 역할을 한다.
+![image](/images/lecture/spring-security-s2-12.png)
+
+- `springSecurityFilterChain`의 이름으로 생성되는 필터 빈으로서 DelegatingFilterProxy 로부터 받은 요청을 SecurityFilterChain에 위임하여 보안 처리를 수행한다. 보안 처리 후 DispatcherServlet에 요청을 전달하여 실제 비즈니스 로직 처리가 진행된다.
 - 하나 이상의 SecurityFilterChain 객체들을 가지고 있으며 요청 URL 정보를 기준으로 적절한 SecurityFilterChain을 선택하여 필터를 호출한다.
 - HttpSecurity를 통해 API 추가 시 관련 필터들이 추가된다.
 - 사용자의 요청을 필터 순서대로 호출함으로 보안 기능을 동작시키고 필요 시 직접 필터를 생성해서 기존의 필터 전.후에 추가할 수 있다.
+
+::: warning SecurityFilterChain
+인증을 처리하는 여러 개의 시큐리티 필터를 담은 필터 체인. 여러 개의 SecurityFilterChain을 구성하여 매칭되는 URL에 따라 적절한 SecurityFilterChain이 사용되도록 한다.
+:::
 
 **[DelegatingFilterProxy 생성]**
 
@@ -683,7 +690,7 @@ targetBeanName으로 <u>FilterChainProxy 빈 찾아온다</u>. 이후 `invokeDel
 ## 사용자 정의 보안 설정
 - 한 개 이상의 SecurityFilterChain 타입의 빈을 정의한 후 인증 / 인가 API를 설정한다.
 
-![image](/images/lecture/spring-security-s2-12.png)
+![image](/images/lecture/spring-security-s2-13.png)
 
 **[SecurityConfig 클래스 생성]**
 
@@ -726,6 +733,7 @@ class DefaultWebSecurityCondition extends AllNestedConditions {
 SecurityFilterChain 빈이 없는 경우에만 디폴트 시큐리티 필터 체인이 생성되는 것을 확인할 수 있다.
 
 **[사용자 설정 추가]**
+
 (1) application.yml
 
 ```
@@ -778,3 +786,6 @@ public UserDetailsService userDetailsService() {
 
 - `.password("{noop}1234")` : {noop)는 비밀번호 인코딩을 하지 않음을 의미
 - yml 설정과 Config 빈 설정이 중복되면 Config 빈 설정이 우선순위가 높다.
+
+## References
+- 스프링 시큐리티 완전 정복 [6.x 개정판] / 인프런 / 정수원
