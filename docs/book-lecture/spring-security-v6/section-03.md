@@ -745,6 +745,95 @@ public class RememberMeAuthenticationFilter extends GenericFilterBean implements
 ![image](/images/lecture/spring-security-s3-15.png)
 securityContextRepository 안에 HttpSessionSecurityContextRepository가 있는 것으로 보아 세션에 저장하는 것을 확인할 수 있다.
 
+
+## 익명 인증
+- 스프링 시큐리티에서는 인증되지 않은 사용자를 "익명으로 인증된" 사용자로 취급하여 액세스 제어 속성을 구성하는 더 편리한 방법을 제공한다.
+- 익명 사용자는 인증받지 못한 사용자(익명으로 인증된 사용자)로 객체화한다.
+	- 익명 사용자, 인증된 사용자 둘 다 객체화된다. (`null` 개념이 없다.)
+	- 익명 인증 사용자든 인증 사용자든 둘 다 SecurityContextHolder는 Authentication 객체를 포함한다. → 클래스를 더 견고하게 작성할 수 있다.
+- 익명 인증 사용자 객체는 세션에 저장하지 않는다. (인증 상태 유지할 필요 없어서 세션에 저장 X)
+- 익명 인증 사용자의 권한을 별도로 운영할 수 있다. (즉, 인증된 사용자가 접근할 수 없도록 구성 가능하다.)
+
+### API 및 구조
+```java
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http, HttpSecurity httpSecurity) throws Exception{
+    http.authorizeHttpRequests(auth-> auth.anyRequest().authenticated())
+            .formLogin(Customizer.withDefaults())
+            .anonymous(anonymousConfigurer -> anonymousConfigurer
+                    .principal("guest")         // 디폴트 값은 anonymousUser
+                    .authorities("ROLE_GUEST")  // 디폴트 값은 ROLE_ANONYMOUS
+            );
+    return http.build();
+}
+```
+### 활용
+```java
+public String method(Authentication authentication) {
+    if (authentication instanceof AnonymousAuthenticationToken) {
+        return "anonymous";
+    } else {
+        return "not anonymous";
+    }
+}
+```
+- authentication을 받을 때 `getPrincipal()`을 사용하여 받는데 요청이 익명이라면 이 객체는 null이다. 즉, 익명 사용자라면 위 메소드는 "not anonymous"를 반환한다.
+
+```java
+public String method(@CurrentSecurityContext SecurityContext context) {
+    return context.getAuthentication().getName();
+}
+```
+- 익명 요청에서 Authentication을 얻고 싶다면 `@CurrentSecurityContext`를 사용한다. (`CurrentSecurityContextArgumentResolver`에서 요청을 가로채어 처리함)
+
+### AnonymousAuthenticationFilter
+![image](/images/lecture/spring-security-s3-16.png)
+SecurityContextHolder에 Authentication 객체가 없을 경우 (`Authentication == null`일 때) 동작한다. AnonymousAuthenticationToken을 만들고 SecurityContext에 설정한다.
+
+이 토큰에는 보통 `anonymousUser`라는 principal과 `ROLE_ANONYMOUS` 권한이 포함된다.
+
+**[코드]**
+- 컨트롤러
+```java
+@GetMapping("/anonymous")
+public String anonymous() {
+    return "anonymous";
+}
+
+@GetMapping("/authentication")
+public String authentication(Authentication authentication) {
+    if (authentication instanceof AnonymousAuthenticationToken) {
+        return "anonymous";
+    } else {
+        return "null";
+    }
+}
+
+@GetMapping("/anonymousContext")
+public String anonymousContext(@CurrentSecurityContext SecurityContext context) {
+    return context.getAuthentication().getName();
+}
+```
+
+- 설정
+```java
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http, HttpSecurity httpSecurity) throws Exception {
+    http.authorizeHttpRequests(auth -> auth
+                    .requestMatchers("/anonymous").hasRole("GUEST")		// 'ROLE_'은 생략
+                    .requestMatchers("/anonymousContext", "/authentication").permitAll()
+                    .anyRequest().authenticated()
+            )
+            .formLogin(Customizer.withDefaults())
+            .anonymous(anonymousConfigurer -> anonymousConfigurer
+                    .principal("guest")         // 디폴트 값은 anonymousUser
+                    .authorities("ROLE_GUEST")  // 디폴트 값은 ROLE_ANONYMOUS
+            );
+    return http.build();
+}
+```
+
+
 ## References
 
 - 스프링 시큐리티 완전 정복 [6.x 개정판] / 인프런 / 정수원
