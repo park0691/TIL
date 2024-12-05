@@ -256,3 +256,91 @@ public abstract class AbstractAuthenticationProcessingFilter extends GenericFilt
 AuthenticationFilter는 인증 시도 초기에 ID/PW 담은 인증 객체를 생성하고 인증 처리를 맡긴다.
 AuthenticationProvider는 최종 인증 성공한 후 다시 인증 객체를 생성하여 필터에 전달하며, 필터는 SecurityContext에 인증 객체를 저장한다.
 :::
+
+## 인증 컨텍스트
+### SecurityContext
+- 현재 인증된 사용자의 Authentication 객체를 저장한다.
+	- 현재 사용자의 인증 상태나 권한을 확인하는데 사용된다.
+- ThreadLocal 저장소에 저장된다.
+- 어플리케이션의 어디서든지 접근 가능하다.
+
+::: warning ThreadLocal
+각 스레드마다 가지는 독립된 고유 저장소<br/>
+SecurityContextHolder에 의해 접근되며 ThreadLocal 저장소를 사용해 각 스레드가 자신만의 보안 컨텍스트를 유지한다.<br/>
+클라이언트가 서버에 요청하면 서버는 클라이언트마다 스레드를 생성한다. 스레드마다 스레드 로컬 저장소가 부여된다. 이 스레드 로컬에 시큐리티 컨텍스트가 저장된다. (즉, 스레드마다 시큐리티 컨텍스트를 가진다.)
+:::
+
+### SecurityContextHolder
+- Authentication 객체를 담은 SecurityContext 객체를 저장한다.
+	- 내부적으로 ThreadLocal 가지고 있어서 그 안에 SecurityContext를 저장한다.
+	- `SecurityContxtHolder > ThreadLocal > SecurityContext > Authentication`
+- 다양한 저장 전략을 지원하기 위해 `SecurityContextHolderStrategy` 인터페이스 사용
+- 전략 모드 직접 지정은 `SecurityContextHolder.setStrategyName(String)`
+
+![image](/images/lecture/spring-security-s4-4.png)
+
+```java
+void clearContext(); // 현재 컨텍스트를 삭제한다
+SecurityContext getContext(); // 현재 컨텍스트를 얻는다
+Supplier<SecurityContext> getDeferredContext() // 현재 컨텍스트를 반환하는 Supplier 를 얻는다
+void setContext(SecurityContext context); // 현재 컨텍스트를 저장한다
+void setDeferredContext(Supplier<SecurityContext> deferredContext) // 현재 컨텍스트를 반환하는 Supplier 를 저장한다
+SecurityContext createEmptyContext(); // 새롭고 비어 있는 컨텍스트를 생성한다
+```
+
+**[저장 모드]**
+- MODE_THREADLOCAL
+	- 기본 모드로 각 스레드가 독립적인 보안 컨텍스트를 가진다. 대부분의 서버 환경에 적합
+- MODE_INHERITABLETHREADLOCAL
+	- 부모 스레드로부터 자식 스레드 보안 컨텍스트가 상속되며, 작업을 스레드 간 분산 실행하는 경우에 유용
+- MODE_GLOBAL
+	- 전역적으로 단일 보안 컨텍스트를 사용하며 서버 환경에서는 부적합하며 주로 간단한 애플리케이션에 적합
+
+#### 참조 및 삭제
+```java
+SecurityContexHolder.getContextHolderStrategy().getContext();
+SecurityContexHolder.getContextHolderStrategy().clearContext();
+```
+
+### 구조
+![image](/images/lecture/spring-security-s4-5.png)
+
+Request에 대해 각각의 스레드가 할당되며, 해당 스레드의 스레드 로컬에는 SecurityContext가 존재한다. 보통 스레드 풀을 만들고 요청을 각 스레드에 할당시켜서 그 요청을 처리한다.
+
+SecurityContextHolder는 각 요청의 ThreadLocal 1 ~ 3에 시큐리티 컨텍스트를 저장한다.
+
+스레드마다 독립적으로 자기 자신만의 ThreadLocal(시큐리티 컨텍스트)를 가지며 시큐리티 컨텍스트는 스레드 간에 공유되지 않는다.
+
+- 스레드마다 할당 되는 전용 저장소에 SecurityContext를 저장하기 때문에 동시성의 문제가 없다.
+
+- 스레드 풀에서 운용되는 스레드는 새로운 요청이더라도 기존의 ThreadLocal이 재사용될 수 있기 때문에 클라이언트로 응답 직전에 <u>항상 SecurityContext를 삭제</u>한다
+
+**[ThreadLocal 사용하는 이유]**
+
+1번 요청은 1번 요청을 담당하는 스레드의 인증 객체를 가져야지, 2번 요청을 담당하는 스레드의 인증 객체를 참조하면 안 된다. 스레드 로컬은 각 스레드마다 독립적으로 가지고 있어서 스레드 간 공유되지 않기 때문에 스레드 로컬을 사용한다.
+
+#### SecurityContextHolderStrategy 사용하기
+**[기존 방식]**
+
+```java
+SecurityContext context = SecurityContextHolder.createEmptyContext();
+context.setAuthentication(authentication);
+SecurityContextHolder.setContext(context);
+```
+위 코드는 SecurityContextHolder를 통해 SecurityContext에 정적으로 접근할 때
+여러 애플리케이션 컨텍스트가 동시에 SecurityContextHolderStrategy를 지정한다면 경쟁 조건을 만들 수 있다.
+
+SecurityContextHolderStrategy를 공유하기 때문에 각각의 어플리케이션 컨텍스트가 하나의 SecurityContextHolderStrategy에 동시에 접근할 수 있기 때문이다.
+
+**[변경된 방식]**
+
+```java
+SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder.getContextHolderStrategy();
+SecurityContext context = securityContextHolderStrategy.createEmptyContext();
+context.setAuthentication(authentication);
+securityContextHolderStrategy.setContext(context);
+```
+애플리케이션이 SecurityContext를 정적으로 접근하는 대신 SecurityContextHolderStrategy를 자동 주입되도록 한다.
+
+각 애플리케이션 컨텍스트는 자신에게 가장 적합한 보안 전략을 사용할 수 있다.
+
