@@ -344,3 +344,29 @@ securityContextHolderStrategy.setContext(context);
 
 각 애플리케이션 컨텍스트는 자신에게 가장 적합한 보안 전략을 사용할 수 있다.
 
+## 인증 관리자
+![image](/images/lecture/spring-security-s4-6.png)
+
+### AuthenticationManager
+- 인증 필터로부터 Authentication 객체를 전달 받아 인증을 시도하며 인증에 성공할 경우 사용자 정보, 권한 등을 포함한 완전히 채워진 Authentication 객체를 반환한다.
+- AuthenticationManager는 <u>여러 AuthenticationProvider들을 관리</u>하며 AuthenticationProvider 목록을 순차적으로 순회하며 인증 요청을 처리한다.
+	- AuthenticationProvider 목록 중에서 인증 처리 요건에 맞는 적절한 프로바이더를 찾아 인증 처리를 위임한다. (실제 인증 처리를 프로바이더에게 위임)
+- AuthenticationManagerBuilder에 의해 객체가 생성되며 주로 사용하는 구현체로 ProviderManager가 제공된다.
+
+### AuthenticationManagerBuilder
+- AuthenticationManager 객체를 생성하며 UserDetailsService 및 AuthenticationProvider를 추가할 수 있다.
+- `HttpSecurity.getSharedObject(AuthenticationManagerBuilder.class)`를 통해 객체를 참조할 수 있다.
+
+**[흐름도]**
+![image](/images/lecture/spring-security-s4-7.png)
+
+- 인증 필터가 ProviderManager에게 Authentication 객체와 함께 인증 요청을 위임하면 ProviderManager는 해당 인증을 처리할 수 있는 Provider에게 Authentication 객체를 위임한다.
+  - e.g. Form 인증 요청이 온다면 ProviderManager는 해당 인증을 처리할 수 있는 적절한 Provider를 선택한다. (Form 인증은 DaoAuthenticationFilter)
+
+- 선택적으로 부모 AuthenticationManager를 구성할 수 있으며 이 부모는 AuthenticationProvider가 인증을 수행할 수 없는 경우 추가적으로 탐색할 수 있다.
+  - e.g. OAuth2 인증을 처리할 수 있는 프로바이더가 없는 경우 자신의 부모 ProviderManager가 있는지 확인한다. 부모 프로바이더 매니저가 처리할 수 있는 프로바이더를 보고 OAuth2 인증을 처리 할 수 있는 프로바이더가 있다면 맡길 수 있다.
+
+- AuthenticationProvider 로부터 null 이 아닌 응답 받을 때까지 차례대로 시도하며 응답을 받지 못하면 `ProviderNotFoundException`과 함께 인증 실패한다.
+
+
+
