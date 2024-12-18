@@ -350,7 +350,8 @@ securityContextHolderStrategy.setContext(context);
 ### AuthenticationManager
 - 인증 필터로부터 Authentication 객체를 전달 받아 인증을 시도하며 인증에 성공할 경우 사용자 정보, 권한 등을 포함한 완전히 채워진 Authentication 객체를 반환한다.
 - AuthenticationManager는 <u>여러 AuthenticationProvider들을 관리</u>하며 AuthenticationProvider 목록을 순차적으로 순회하며 인증 요청을 처리한다.
-	- AuthenticationProvider 목록 중에서 인증 처리 요건에 맞는 적절한 프로바이더를 찾아 인증 처리를 위임한다. (실제 인증 처리를 프로바이더에게 위임)
+	- AuthenticationProvider 목록 중에서 인증 처리에 적합한 프로바이더를 찾아 인증 처리를 위임한다. (실제 인증 처리를 프로바이더에게 위임)
+	- 자기 자신이 처리하지 못하면 부모 AuthenticationManager에게 인증 처리를 맡긴다.
 - AuthenticationManagerBuilder에 의해 객체가 생성되며 주로 사용하는 구현체로 ProviderManager가 제공된다.
 
 ### AuthenticationManagerBuilder
@@ -361,12 +362,372 @@ securityContextHolderStrategy.setContext(context);
 ![image](/images/lecture/spring-security-s4-7.png)
 
 - 인증 필터가 ProviderManager에게 Authentication 객체와 함께 인증 요청을 위임하면 ProviderManager는 해당 인증을 처리할 수 있는 Provider에게 Authentication 객체를 위임한다.
-  - e.g. Form 인증 요청이 온다면 ProviderManager는 해당 인증을 처리할 수 있는 적절한 Provider를 선택한다. (Form 인증은 DaoAuthenticationFilter)
+  - e.g. Form 인증 요청이 온다면 ProviderManager는 해당 인증을 처리할 수 있는 적절한 Provider를 선택한다. (Form 인증은 DaoAuthenticationProvider)
 
 - 선택적으로 부모 AuthenticationManager를 구성할 수 있으며 이 부모는 AuthenticationProvider가 인증을 수행할 수 없는 경우 추가적으로 탐색할 수 있다.
   - e.g. OAuth2 인증을 처리할 수 있는 프로바이더가 없는 경우 자신의 부모 ProviderManager가 있는지 확인한다. 부모 프로바이더 매니저가 처리할 수 있는 프로바이더를 보고 OAuth2 인증을 처리 할 수 있는 프로바이더가 있다면 맡길 수 있다.
 
 - AuthenticationProvider 로부터 null 이 아닌 응답 받을 때까지 차례대로 시도하며 응답을 받지 못하면 `ProviderNotFoundException`과 함께 인증 실패한다.
 
+#### 사용 방법
+- CustomAuthenticationFilter
+```java
+public class CustomAuthenticationFilter extends AbstractAuthenticationProcessingFilter {
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    public CustomAuthenticationFilter(HttpSecurity http) {
+        super(new AntPathRequestMatcher("/api/login", "GET"));
+        setSecurityContextRepository(getSecurityContextRepository(http));
+    }
+
+    private SecurityContextRepository getSecurityContextRepository(HttpSecurity http) {
+        SecurityContextRepository securityContextRepository = http.getSharedObject(SecurityContextRepository.class);
+        if (securityContextRepository == null) {
+            securityContextRepository = new DelegatingSecurityContextRepository(
+                    new RequestAttributeSecurityContextRepository(), new HttpSessionSecurityContextRepository());
+        }
+        return securityContextRepository;
+    }
+
+    @Override
+    public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response)
+            throws AuthenticationException, IOException {
+
+        String username = request.getParameter("username");
+        String password = request.getParameter("password");
+
+        UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(username,password);
+
+        return this.getAuthenticationManager().authenticate(token);
+    }
+}
+```
+
+- CustomAuthenticationProvider
+```java
+public class CustomAuthenticationProvider implements AuthenticationProvider {
+
+    @Override
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+
+        String loginId = authentication.getName();
+        String password = (String) authentication.getCredentials();
+
+        return new UsernamePasswordAuthenticationToken(loginId, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+    }
+
+    @Override
+    public boolean supports(Class<?> authentication) {
+        return authentication.isAssignableFrom(UsernamePasswordAuthenticationToken.class);
+    }
+}
+```
+
+1. `HttpSecurity` 사용
+
+```java
+@EnableWebSecurity
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        AuthenticationManagerBuilder authenticationManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        AuthenticationManager authenticationManager = authenticationManagerBuilder.build();   // 최초 1번만 호출해야 함
+//        AuthenticationManager authenticationManager = authenticationManagerBuilder.getObject();  // build 후에는 getObject()로 참조
 
 
+        http.authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/", "/api/login").permitAll()
+                        .anyRequest().authenticated())
+                .authenticationManager(authenticationManager)
+                .addFilterBefore(customFilter(http, authenticationManager), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+    // Bean으로 선언할 수 없다. (AuthenticationManager는 빈이 아님)
+    public CustomAuthenticationFilter customFilter(HttpSecurity http, AuthenticationManager authenticationManager) {
+        CustomAuthenticationFilter customAuthenticationFilter = new CustomAuthenticationFilter(http);
+        customAuthenticationFilter.setAuthenticationManager(authenticationManager);
+
+        return customAuthenticationFilter;
+    }
+    ...
+```
+
+2. 직접 생성
+```java
+@EnableWebSecurity
+@Configuration
+public class SecurityConfig2 {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/", "/api/login").permitAll()
+                        .anyRequest().authenticated())
+                .addFilterBefore(customFilter(http), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+    // Bean으로 선언 가능
+    public CustomAuthenticationFilter customFilter(HttpSecurity http) {
+        List<AuthenticationProvider> list1 = List.of(new DaoAuthenticationProvider());
+        ProviderManager parent = new ProviderManager(list1);
+        List<AuthenticationProvider> list2 = List.of(new AnonymousAuthenticationProvider("key"), new CustomAuthenticationProvider());
+        ProviderManager providerManager = new ProviderManager(list2, parent);
+
+        CustomAuthenticationFilter customAuthenticationFilter = new CustomAuthenticationFilter(http);
+        customAuthenticationFilter.setAuthenticationManager(providerManager);
+
+        return customAuthenticationFilter;
+    }
+```
+![image](/images/lecture/spring-security-s4-8.png)
+
+`http://localhost:8080/api/login?username=user&password=1234`
+
+- ProviderManager 디버깅<br/>
+	providers → Annonymous / Custom 프로바이더<br/>
+	parent.providers → DaoAuthentication 프로바이더로 셋팅된 것 확인
+
+### AuthenticationProvider
+- 사용자의 자격 증명을 확인하고 인증 과정을 관리하는 클래스로 사용자가 시스템에 액세스하기 위해 제공한 정보(예: 아이디와 비밀번호)가 유효한지 검증한다.
+- 표준 사용자 이름과 비밀번호를 기반으로 한 인증, 토큰 기반 인증, 지문 인식 등 다양한 유형의 인증 메커니즘을 지원한다.
+- 인증 성공 시 인증된 자격 증명, 사용자 정보를 포함한 Authentication 객체를 반환한다.
+- 인증 중 문제가 발생한 경우 `AuthenticationException` 예외를 발생시킨다.
+
+```java
+public interface AuthenticationProvider {
+	Authentication authenticate(Authentication authentication) throws AuthenticationException;
+	boolean supports(Class<?> authentication); // 인증 수행하기 적합한지 검사
+}
+```
+
+**[흐름도]**
+![image](/images/lecture/spring-security-s4-9.png)
+
+
+**[생성 과정]**
+```java
+@Order(InitializeAuthenticationProviderBeanManagerConfigurer.DEFAULT_ORDER)
+class InitializeAuthenticationProviderBeanManagerConfigurer extends GlobalAuthenticationConfigurerAdapter {
+	...
+	class InitializeAuthenticationProviderManagerConfigurer extends GlobalAuthenticationConfigurerAdapter {
+
+		@Override
+		public void configure(AuthenticationManagerBuilder auth) {
+			if (auth.isConfigured()) {
+				return;
+			}
+			// Custom 빈 없기 때문에 AuthenticationProvider 
+			List<BeanWithName<AuthenticationProvider>> authenticationProviders = getBeansWithName(
+					AuthenticationProvider.class);
+			if (authenticationProviders.isEmpty()) {
+				return;
+			}
+	...
+```
+
+`InitializeAuthenticationProviderBeanManagerConfigurer`에서 리턴 후 `InitializeUserDetailsBeanManagerConfigurer` 호출
+
+```java
+@Order(InitializeUserDetailsBeanManagerConfigurer.DEFAULT_ORDER)
+class InitializeUserDetailsBeanManagerConfigurer extends GlobalAuthenticationConfigurerAdapter {
+	...
+	class InitializeUserDetailsManagerConfigurer extends GlobalAuthenticationConfigurerAdapter {
+
+		private final Log logger = LogFactory.getLog(getClass());
+
+		@Override
+		public void configure(AuthenticationManagerBuilder auth) throws Exception {
+			// UserDetailsService 받고
+			List<BeanWithName<UserDetailsService>> userDetailsServices = getBeansWithName(UserDetailsService.class);
+			if (auth.isConfigured()) {
+				...
+				return;
+			}
+			...
+			UserDetailsService userDetailsService = userDetailsServices.get(0).getBean();
+			String userDetailsServiceBeanName = userDetailsServices.get(0).getName();
+			PasswordEncoder passwordEncoder = getBeanOrNull(PasswordEncoder.class);
+			UserDetailsPasswordService passwordManager = getBeanOrNull(UserDetailsPasswordService.class);
+			CompromisedPasswordChecker passwordChecker = getBeanOrNull(CompromisedPasswordChecker.class);
+			DaoAuthenticationProvider provider;
+			// DaoAuthenticationProvider 생성
+			if (passwordEncoder != null) {
+				provider = new DaoAuthenticationProvider(passwordEncoder);
+			}
+			else {
+				provider = new DaoAuthenticationProvider();
+			}
+			...
+```
+- `DaoAuthenticationProvider` 생성 확인
+
+
+#### 사용 방법
+1. 일반 객체로 생성
+```java
+public class CustomAuthenticationProvider implements AuthenticationProvider {
+
+    @Override
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+
+        String loginId = authentication.getName();
+        String password = (String) authentication.getCredentials();
+
+        // id 검증
+        // pw 검증
+
+        return new UsernamePasswordAuthenticationToken
+                (loginId, password, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+    }
+
+    @Override
+    public boolean supports(Class<?> authentication) {
+        return authentication.isAssignableFrom(UsernamePasswordAuthenticationToken.class);
+    }
+}
+```
+
+```java
+@EnableWebSecurity
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        AuthenticationManagerBuilder builder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        builder.authenticationProvider(new CustomAuthenticationProvider());
+        builder.authenticationProvider(new CustomAuthenticationProvider2());
+
+        http
+                .authorizeHttpRequests(auth-> auth
+//                        .requestMatchers("/").permitAll()
+                        .anyRequest().authenticated())
+                .formLogin(Customizer.withDefaults())
+//                .authenticationProvider(new CustomAuthenticationProvider())
+//                .authenticationProvider(new CustomAuthenticationProvider2())
+        ;
+        return http.build();
+    }
+```
+
+**[AuthenticationProvider 생성]**
+
+`UsernamePasswordAuthenticationFilter.attemptAuthentication()` → `return this.getAuthenticationManager().authenticate(authRequest);`
+
+![image](/images/lecture/spring-security-s4-10.png)
+
+- 기본으로 생성된 providers 앞에 CustomAuthenticationProvider, CustomAuthenticationProvider2 커스텀 프로바이더 걸린 것 확인
+- 디폴트 프로바이더(AnnonymousAuthenticationProvider, DaoAuthentiationProvider)는 원래 셋팅 유지됨
+
+2. 빈으로 생성
+
+(1) 빈을 한 개만 정의할 경우 [기본 설정]
+```java
+@EnableWebSecurity
+@Configuration
+public class SecurityConfig2 {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .authorizeHttpRequests(auth-> auth
+//                        .requestMatchers("/").permitAll()
+                        .anyRequest().authenticated())
+                .formLogin(Customizer.withDefaults())
+        ;
+        return http.build();
+    }
+
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        return new CustomAuthenticationProvider();
+    }
+    ...
+```
+
+![image](/images/lecture/spring-security-s4-11.png)
+
+- AuthenticationProvider를 빈으로 정의하면 DaoAuthenticationBuilder가 자동으로 CustomAuthenticationFilter로 대체되는 것을 확인할 수 있다. (빈을 하나만 정의하는 경우 원래 셋팅이 바뀜. 크게 문제는 없다.)
+
+(2) 빈을 한 개만 정의할 경우 [원래 셋팅 보존하고 싶을 때]
+
+```java
+@EnableWebSecurity
+@Configuration
+public class SecurityConfig2 {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationManagerBuilder builder,
+                                                   AuthenticationConfiguration configuration) throws Exception {
+        AuthenticationManagerBuilder managerBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        // AnnonymousAuthenticationProvider 위에 커스텀 프로바이더 얹겠다.
+        managerBuilder.authenticationProvider(customAuthenticationProvider());
+
+        // parent DaoAuthenticationProvider로 원복
+        ProviderManager authenticationManager = (ProviderManager) configuration.getAuthenticationManager();
+        authenticationManager.getProviders().remove(0);     // parent.provider에 디폴트로 셋팅된 커스텀 프로바이더 제거
+        builder.authenticationProvider(new DaoAuthenticationProvider());    // DaoAuthenticationProvider 추가
+
+        http
+                .authorizeHttpRequests(auth-> auth
+                        .anyRequest().authenticated())
+                .formLogin(Customizer.withDefaults())
+        ;
+        return http.build();
+    }
+
+    @Bean
+    public AuthenticationProvider customAuthenticationProvider() {
+        return new CustomAuthenticationProvider();
+    }
+    ...
+```
+![image](/images/lecture/spring-security-s4-12.png)
+
+- this.ProviderManager는 HttpSecurity에서 불러온 AuthenticationManagerBuilder가 만든 ProviderManager
+- parent.ProviderManager는 AuthenticationConfiguration이 만들었다.
+- AuthenticationConfiguration에 의해 만들어진 ProviderManager는 메서드 파라미터로 받은 AuthenticationManagerBuilder가 생성한다.
+
+(3) 빈을 두 개 이상 정의할 경우
+```java
+@EnableWebSecurity
+@Configuration
+public class SecurityConfig3 {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, HttpSecurity httpSecurity) throws Exception {
+        AuthenticationManagerBuilder builder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        builder.authenticationProvider(customAuthenticationProvider());
+        builder.authenticationProvider(customAuthenticationProvider2());
+
+        http
+                .authorizeHttpRequests(auth-> auth
+//                        .requestMatchers("/").permitAll()
+                        .anyRequest().authenticated())
+                .formLogin(Customizer.withDefaults())
+        ;
+        return http.build();
+    }
+
+    @Bean
+    public AuthenticationProvider customAuthenticationProvider() {
+        return new CustomAuthenticationProvider();
+    }
+
+    @Bean
+    public AuthenticationProvider customAuthenticationProvider2() {
+        return new CustomAuthenticationProvider();
+    }
+    ...
+```
+![image](/images/lecture/spring-security-s4-13.png)
+
+- 2개 이상의 빈을 생성 및 셋팅하면 원래 셋팅이 유지되는 것을 확인할 수 있다.
+
+
+## References
+
+- 스프링 시큐리티 완전 정복 [6.x 개정판] / 인프런 / 정수원
