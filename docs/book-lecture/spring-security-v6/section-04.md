@@ -727,6 +727,102 @@ public class SecurityConfig3 {
 
 - 2개 이상의 빈을 생성 및 셋팅하면 원래 셋팅이 유지되는 것을 확인할 수 있다.
 
+### UserDetailsService
+```java
+public interface UserDetailsService {
+
+	// 사용자의 이름을 통해 사용자의 데이터를 검색하고, 해당 데이터를 UserDetails 객체로 반환한다.
+	UserDetails loadUserByUsername(String username) throws UsernameNotFoundException;
+}
+```
+
+- 사용자와 관련된 상세 데이터를 로드한다.
+- 로드되는 데이터는 사용자의 신원, 권한, 자격 증명 등과 같은 정보를 포함할 수 있다.
+- AuthenticationProvider가 이 인터페이스를 주로 사용한다.
+- 사용자가 시스템에 존재하는지 여부와 사용자 데이터를 검색하고 인증 과정을 수행한다.
+
+**[흐름도]**
+![image](/images/lecture/spring-security-s4-14.png)
+
+**[사용 방법]**
+```java
+@EnableWebSecurity
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+
+        // 방법 1
+        AuthenticationManagerBuilder builder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        builder.userDetailsService(customUserDetailsService());
+        // 방법 2
+        http.userDetailsService(customUserDetailsService());
+
+        http
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .formLogin(Customizer.withDefaults())
+        ;
+        return http.build();
+    }
+
+    @Bean
+    public UserDetailsService customUserDetailsService() {
+        return new CustomUserDetailsService();
+    }
+}
+```
+- 하나만 정의한다면 Bean만 직접 생성해주면 자동으로 CustomUserDetailsService가 주입된다. (방법1 / 2 코드 불필요)
+
+
+
+`UsernamePasswordAuthenticationFilter.attemptAuthentication` → `return this.getAuthenticationManager().authenticate(authRequest);`
+
+![image](/images/lecture/spring-security-s4-15.png)
+
+DaoAuthenticationProvider가 CustomUserDetailsService 사용하는 것을 확인할 수 있다.
+
+DaoAuthenticationProvider가 선택됬을 때 
+
+```java
+public abstract class AbstractUserDetailsAuthenticationProvider
+		implements AuthenticationProvider, InitializingBean, MessageSourceAware {
+	...
+	@Override
+	public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+		Assert.isInstanceOf(UsernamePasswordAuthenticationToken.class, authentication,
+				() -> this.messages.getMessage("AbstractUserDetailsAuthenticationProvider.onlySupports",
+						"Only UsernamePasswordAuthenticationToken is supported"));
+		String username = determineUsername(authentication);
+		boolean cacheWasUsed = true;
+		UserDetails user = this.userCache.getUserFromCache(username);
+		if (user == null) {
+			cacheWasUsed = false;
+			try {
+				user = retrieveUser(username, (UsernamePasswordAuthenticationToken) authentication);
+			}
+```
+retrieveUser() 메소드에서
+
+```java
+public class DaoAuthenticationProvider extends AbstractUserDetailsAuthenticationProvider {
+	...
+	@Override
+	protected final UserDetails retrieveUser(String username, UsernamePasswordAuthenticationToken authentication)
+			throws AuthenticationException {
+		prepareTimingAttackProtection();
+		try {
+			// CustomUserDetailsService가 사용된다.
+			UserDetails loadedUser = this.getUserDetailsService().loadUserByUsername(username);
+			if (loadedUser == null) {
+				throw new InternalAuthenticationServiceException(
+						"UserDetailsService returned null, which is an interface contract violation");
+			}
+			return loadedUser;
+		}
+```
+CustomDetailsService가 사용된다.
+
 
 ## References
 
