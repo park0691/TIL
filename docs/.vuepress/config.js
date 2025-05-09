@@ -41,6 +41,12 @@ export default defineUserConfig({
           },
           'generics',
           {
+            text: 'Collections',
+            children: [
+              'collections-hashing'
+            ]
+          },
+          {
             text: 'Thread Programming',
             children: [
               'thread-runnable',
