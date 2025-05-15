@@ -43,7 +43,8 @@ export default defineUserConfig({
           {
             text: 'Collections',
             children: [
-              'collections-hashing'
+              'collections-hashing',
+              'collections-map'
             ]
           },
           {
