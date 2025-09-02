@@ -4,6 +4,7 @@
 - `key-value` 형태로 데이터를 저장한다.
     - `key`중복 불가 (`key`는 Map에서 고유한 값)
     - `value`중복 가능
+    - 리스트, 배열처럼 순차적으로 해당 요소 값을 구하지 않고 key로 value를 찾는다.
 - `java.util.Collection`을 직접 구현하지 않지만, 맵의 데이터를 컬렉션 뷰로 변환해 Set과 Collection 처럼 처리할 수 있는 방법을 제공한다.
 - `Hashtable, HashMap`은 <u>'키에 대한 해시 값을 사용하여 값을 저장하고 조회하며, 키-값 쌍의 개수에 따라 동적으로 크기가 증가하는 `associate array`’</u>라 정의할 수 있다. ‘`associate array`’를 지칭하는 다른 용어는 대표적으로 ‘Map, Dictionary, Symbol Table’ 등이다.
 
@@ -196,7 +197,7 @@ static final int UNTREEIFY_THRESHOLD = 6;
 
 하나의 해시 버킷에 8개(***TREEIFY_THRESHOLD***)의 키-값 쌍이 모이면 링크드 리스트를 트리로 변환한다. 만약 해당 버킷의 데이터를 삭제하여 개수가 6개(***UNTREEIFY_THRESHOLD***)에 이르면 다시 링크드 리스트로 변경한다.
 
-트리는 링크드 리스트보다 메모리 사용량이 많고 데이터의 개수가 적을 때 트리와 링크드 리스트 사이의 큰 성능 차이가 없기 때문이다. 8과 6으로 2 이상의 차이를 둔 것은, 만약 차이가 1이라면 어떤 한 키-값 쌍이 반복되어 삽입/삭제되는 경우 불필요하게 트리와 링크드 리스트의 변경이 반복되어 성능이 저하될 수 있기 때문이다.
+트리는 링크드 리스트보다 메모리 사용량이 많고 데이터의 개수가 적을 때 트리와 링크드 리스트 사이의 큰 성능 차이가 없기 때문이다. 8과 6으로 2 이상의 차이를 둔 것은, 만약 차이가 1이라면 어떤 한 키-값 쌍이 반복되어 삽입/삭제되는(버킷 사이즈가 계속 6-7-6-7로 왔다갔다 하는) 경우 불필요하게 트리와 링크드 리스트의 변경이 반복되어 성능이 저하될 수 있기 때문에 조금의 갭을 두고 자주 구조가 변경되지 않도록 한 것이다.
 :::
 
 ### Capacity와 Load Factor
@@ -265,6 +266,22 @@ static final int hash(Object key) { int h; return (key == null) ? 0 : (h = key.h
 
 개념상 해시 버킷 인덱스를 계산할 때에는 `index = X.hashCode() % M`처럼 나머지 연산을 사용하는 것이 맞지만, M값이 2a일 때는 해시 함수의 하위 a비트 만을 취한 것과 값이 같다. 따라서 나머지 연산 대신 `1 << a – 1` 와 비트 논리곱(AND, &) 연산을 사용하면 훨씬 더 성능이 좋다.
 
+### 주요 메소드
+| 메소드                                            | 설명                                                                                        |
+|------------------------------------------------|-------------------------------------------------------------------------------------------|
+| void clear()                                   | 해당 맵(map)의 모든 매핑(mapping)을 제거                                                           |
+| boolean containsKey(Object key)                | 해당 맵이 전달된 키를 포함하고 있는지를 확인                                                               |
+| boolean containsValue(Object value)            | 해당 맵이 전달된 값에 해당하는 하나 이상의 키를 포함하고 있는지를 확인                                                |
+| V get(Object key)                              | 해당 맵에서 전달된 키에 대응하는 값을 반환<br>만약 해당 맵이 전달된 키를 포함한 매핑을 포함하고 있지 않으면 null을 반환 |
+| boolean isEmpty()                              | 해당 맵이 비어있는지 확인                                                                         |
+| Set&lt;K&gt; keySet()                          | 해당 맵에 포함되어 있는 모든 키로 만들어진 Set 객체를 반환                                                     |
+| V put(K key, V value)                          | 해당 맵에 전달된 키에 대응하는 값으로 특정 값을 매핑                                                         |
+| V remove(Object key)                           | 해당 맵에서 전달된 키에 대응하는 매핑을 제거                                                               |
+| boolean remove(Object key, Object value)       | 해당 맵에서 특정 값에 대응하는 특정 키의 매핑을 제거                                                          |
+| V replace(K key, V value)                      | 해당 맵에서 전달된 키에 대응하는 값을 특정 값으로 대체                                                         |
+| boolean replace(K key, V oldValue, V newValue) | 해당 맵에서&nbsp;특정 값에 대응하는 전달된 키의 값을 새로운 값으로 대체                                             |
+| int size()                                     | 해당 맵의 매핑의 총 개수를 반환                                                                      |
+
 ## Hashtable
 - `HashMap`와 같은 동작을 하는 클래스
 - `null` 저장 불가
@@ -273,12 +290,45 @@ static final int hash(Object key) { int h; return (key == null) ? 0 : (h = key.h
 - 기존 코드와의 호환성을 위해서만 남아있으므로 `HashMap` 사용하는 것이 좋다. (레거시 클래스다)
 
 ## TreeMap
-- ??
+- `key`를 정렬한다. (디폴트 : 오름차순) → 입력된 key 순으로 데이터를 출력할 수 있다.
+    - 정렬 순서 : 숫자 > 알파벳 대문자 > 알파벳 소문자 > 한글 순 (String 저장되는 순서)
+- `HashMap`보다 성능이 떨어진다.
+    - 데이터 저장할 때 정렬하기 때문에 추가, 삭제가 `HashMap`보다 오래 걸린다.
+- 정렬된 상태로 `Map` 유지해야 하거나, 범위 안에 포함되는 데이터 검색의 효율이 좋다.
+- 키를 정렬하는 것은 `SortedMap` 인터페이스 구현했기 때문
+    - `firstKey(), lastKey()` : 가장 앞, 뒤에 있는 키
+    - `higherKey(), lowerKey()` : 특정 키 뒤, 앞에 있는 키
+- **`*key-value*`** 형태의 데이터를 이진 검색 트리 형태로 저장한다.
+    - BST : 정렬, 검색, 범위 검색에 높은 성능을 보여주는 자료구조
+        - 데이터 추가하거나 제거하는 등의 기본 동작 시간이 매우 빠르다.
+    - BST 의 성능을 향상시킨 레드-블랙트리로 구현되어 있다.
+    - 정렬 디폴트
+        - 부모 키와 비교해서 키 값이 낮은 것은 왼쪽 자식 노드, 높은 것은 오른쪽 자식 노드에 저장
 
 ## LinkedHashMap
 - 입력된 순서대로 데이터가 출력된다.
 
 ## WeakHashMap
+- `WeakReference`를 이용하는 해시맵
+- key로 사용되는 객체가 더 이상 사용되지 않을 때, 해당 엔트리 (key, value)는 제거된다.
+
+```java
+@Test
+public void weakHashMapTest() {
+    WeakHashMap<Integer, String> map = new WeakHashMap<>();
+    Integer myNumber1 = 17000;
+    Integer myNumber2 = 18000;
+    map.put(myNumber1, "value1");
+    map.put(myNumber2, "value2");
+
+    myNumber1 = null;
+
+    System.gc();
+		// myNumber1 키는 null이 되어 해당 엔트리는 GC되기 때문에
+		// 출력 결과는 '18000=value2' 하나만 나옴
+    map.entrySet().stream().forEach(System.out::println);
+}
+```
 
 ## References
 - https://mangkyu.tistory.com/101
