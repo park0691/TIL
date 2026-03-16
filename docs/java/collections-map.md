@@ -82,6 +82,7 @@ int index = X.hashCode() % M;
 ## HashMap
 - `Hashtable`을 발전시켜 Java 2부터 지원하게 된 클래스
 - 해싱을 사용하므로 많은 양의 데이터를 검색하는데 뛰어난 성능 - 해시맵의 핵심!!
+    - 스레드 세이프하지 않지만, 단일 스레드 환경에서는 가장 빠르다.
     - 키의 해시코드를 사용하여 데이터의 저장 위치(해시 버킷의 인덱스)를 결정하므로 데이터 추가, 검색, 삭제 등의 작업을 빠르게 수행
 - `null`값이 올 수 있다. (`null` 키 하나, `null` 값 여러 개 허용)
 - `key-value`를 각각 `Object`타입으로 저장한다.
@@ -284,21 +285,29 @@ static final int hash(Object key) { int h; return (key == null) ? 0 : (h = key.h
 
 ## Hashtable
 - `HashMap`와 같은 동작을 하는 클래스
+- 기존 코드와의 호환성을 위해서만 남아있으므로 `HashMap` 사용하는 것이 좋다. (레거시 클래스다)
 - `null` 저장 불가
 - `thread-safe` 하다.
-    - `synchronized`로 동기화 처리 되어 있어 blocking 후 unblock 될 때까지 기다려야 되기 때문에 HashMap에 비해 성능상 느리다.
-- 기존 코드와의 호환성을 위해서만 남아있으므로 `HashMap` 사용하는 것이 좋다. (레거시 클래스다)
+    - 모든 메서드에 `synchronized`로 동기화 처리 되어 있어 blocking 후 unblock 될 때까지 기다려야 되기 때문에 HashMap에 비해 성능상 느리다.
+- `thread-safe` 필요한 경우 성능이 개선된 `ConcurrentHashMap` 사용을 권장한다.
+
+## ConcurrentHashMap
+- `Hashtable`의 단점인 성능 저하를 해결하기 위해 고안된, 멀티스레드 환경에서 높은 병렬성을 보장하는 스레드 안전(Thread-safe)한 Map 클래스
+- 테이블 전체에 락(Lock)을 거는 대신, 특정 영역(Segment)에만 락을 걸거나 CAS(Compare-And-Swap) 알고리즘을 사용하여 데이터 접근 효율을 극대화한다.
+- `Hashtable`과 마찬가지로 키와 값에 `null`을 허용하지 않으며, 읽기 작업에는 락이 걸리지 않아 동기화된 컬렉션 중 가장 높은 성능을 보인다.
 
 ## TreeMap
 - `key`를 정렬한다. (디폴트 : 오름차순) → 입력된 key 순으로 데이터를 출력할 수 있다.
     - 정렬 순서 : 숫자 > 알파벳 대문자 > 알파벳 소문자 > 한글 순 (String 저장되는 순서)
 - `HashMap`보다 성능이 떨어진다.
     - 데이터 저장할 때 정렬하기 때문에 추가, 삭제가 `HashMap`보다 오래 걸린다.
+- 데이터 삽입/조회 시간 복잡도 : `O(log n)`
 - 정렬된 상태로 `Map` 유지해야 하거나, 범위 안에 포함되는 데이터 검색의 효율이 좋다.
 - 키를 정렬하는 것은 `SortedMap` 인터페이스 구현했기 때문
     - `firstKey(), lastKey()` : 가장 앞, 뒤에 있는 키
     - `higherKey(), lowerKey()` : 특정 키 뒤, 앞에 있는 키
 - **`*key-value*`** 형태의 데이터를 이진 검색 트리 형태로 저장한다.
+    - 이진 검색 트리(Red-Black Tree) 구조를 사용하여 키(Key)를 기준으로 자동 정렬한다.
     - BST : 정렬, 검색, 범위 검색에 높은 성능을 보여주는 자료구조
         - 데이터 추가하거나 제거하는 등의 기본 동작 시간이 매우 빠르다.
     - BST 의 성능을 향상시킨 레드-블랙트리로 구현되어 있다.
@@ -306,7 +315,8 @@ static final int hash(Object key) { int h; return (key == null) ? 0 : (h = key.h
         - 부모 키와 비교해서 키 값이 낮은 것은 왼쪽 자식 노드, 높은 것은 오른쪽 자식 노드에 저장
 
 ## LinkedHashMap
-- 입력된 순서대로 데이터가 출력된다.
+- 데이터가 **삽입된 순서(Insertion Order)**를 유지한다.
+- 캐시(LRU 알고리즘) 등을 고현할 때 매우 유용하다.
 
 ## WeakHashMap
 - `WeakReference`를 이용하는 해시맵
