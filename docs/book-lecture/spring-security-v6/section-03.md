@@ -527,7 +527,14 @@ public class BasicAuthenticationFilter extends OncePerRequestFilter {
 ```
 
 ## 기억 인증(RememberMe)
-- 사용자가 웹 사이트나 애플리케이션에 로그인할 때 자동으로 인증 정보를 기억하는 기능이다
+- 로그인을 유지하고 싶을 때(예: '로그인 유지하기' 체크), 세션이 만료되거나 브라우저를 종료한 후 다시 방문하더라도 별도의 로그인 절차 없이 자동으로 인증을 복구하는 기능
+- 동작 메커니즘
+	- 세션과의 관계: 기본적으로 로그인은 JSESSIONID를 통한 세션 기반 인증으로 수행된다. 하지만 세션은 유효 기간이 짧고 브라우저 종료 시 삭제될 수 있다.
+	- 쿠키의 역할: 세션이 끊겼을 때를 대비해, 브라우저에 remember-me라는 별도의 쿠키를 저장한다.
+	- 인증 프로세스
+		- 1. 사용자가 요청을 보낼 때 **JSESSIONID가 없거나 세션이 만료되었다면**, 스프링 시큐리티의 `RememberMeAuthenticationFilter`가 작동한다.
+		- 2. 브라우저가 보낸 `RememberMe` 쿠키를 감지하여 그 안의 토큰을 검증한다.
+		- 3. 토큰이 유효하면 사용자 정보를 조회해 SecurityContext에 인증 객체를 다시 생성한다.
 - UsernamePasswordAuthenticationFilter 와 함께 사용되며, AbstractAuthenticationProcessingFilter 슈퍼클래스에서 훅을 통해 구현된다
 	- 인증 성공 시 RememberMeServices.loginSuccess() 를 통해 RememberMe 토큰을 생성하고 쿠키로 전달한다.
 	- 인증 실패 시 RememberMeServices.loginFail() 를 통해 쿠키를 지운다.
@@ -749,9 +756,9 @@ securityContextRepository 안에 HttpSessionSecurityContextRepository가 있는 
 ## 익명 인증
 - 스프링 시큐리티에서는 인증되지 않은 사용자를 "익명으로 인증된" 사용자로 취급하여 액세스 제어 속성을 구성하는 더 편리한 방법을 제공한다.
 - 익명 사용자는 인증받지 못한 사용자(익명으로 인증된 사용자)로 객체화한다.
-	- 익명 사용자, 인증된 사용자 둘 다 객체화된다. (`null` 개념이 없다.)
+	- 익명 사용자, 인증된 사용자 둘 다 객체화된다. (`null` 개념이 없다. *전통적으로 로그인 실패하면 userRepository에서 받은 user는 `null`로 조회됨. `null`이면 인증 받지 못한 사용자로 처리하는게 보통이나, 스프링 시큐리티에서는 `null` 개념을 없애고 인증 받지 못한 사용자 개념을 별도로 운영하는 개념.*)
 	- 익명 인증 사용자든 인증 사용자든 둘 다 SecurityContextHolder는 Authentication 객체를 포함한다. → 클래스를 더 견고하게 작성할 수 있다.
-- 익명 인증 사용자 객체는 세션에 저장하지 않는다. (인증 상태 유지할 필요 없어서 세션에 저장 X)
+- **익명 인증 사용자 객체는 세션에 저장하지 않는다.** (인증 상태 유지할 필요 없어서 세션에 저장 X)
 - 익명 인증 사용자의 권한을 별도로 운영할 수 있다. (즉, 인증된 사용자가 접근할 수 없도록 구성 가능하다.)
 
 ### API 및 구조
@@ -767,8 +774,9 @@ public SecurityFilterChain securityFilterChain(HttpSecurity http, HttpSecurity h
     return http.build();
 }
 ```
-### 활용
+### 활용, Spring MVC
 ```java
+@PostMapping
 public String method(Authentication authentication) {
     if (authentication instanceof AnonymousAuthenticationToken) {
         return "anonymous";
@@ -777,7 +785,7 @@ public String method(Authentication authentication) {
     }
 }
 ```
-- authentication을 받을 때 `getPrincipal()`을 사용하여 받는데 요청이 익명이라면 이 객체는 null이다. 즉, 익명 사용자라면 위 메소드는 "not anonymous"를 반환한다.
+- `authentication`을 받을 때 `HttpServletRequest#getPrincipal()`을 사용하여 받는데 요청이 익명이라면 이 객체는 `null`이다. `authentication` 파라미터 받을 때 
 
 ```java
 public String method(@CurrentSecurityContext SecurityContext context) {
@@ -831,6 +839,136 @@ public SecurityFilterChain securityFilterChain(HttpSecurity http, HttpSecurity h
             );
     return http.build();
 }
+```
+
+## 로그아웃
+- 기본적으로 DefaultLogoutPageGeneratingFilter를 통해 로그아웃 페이지를 제공하며 `GET /logout`로 접근 가능하다.
+- `POST /logout`으로 로그아웃 수행 가능하나, CSRF 기능을 비활성화 또는 RequestMatcher를 사용한 경우 `GET, PUT, DELETE` 모두 가능하다.
+- 로그아웃 필터를 거치지 않고 스프링 MVC에서 커스텀하게 구현할 수 있으며, 로그인 페이지가 커스텀하게 생성될 경우 로그아웃 기능도 커스텀하게 구현해야 한다.
+
+### logout()
+
+```java
+http.logout(httpSecurityLogoutConfigurer -> httpSecurityLogoutConfigurer
+     .logoutUrl("/logoutProc") // 로그아웃이 발생하는 URL을 지정한다 (기본값은 “/logout” 이다)
+     .logoutRequestMatcher(new AntPathRequestMatcher("/logoutProc","POST")) // 로그아웃이 발생하는 RequestMatcher 을 지정한다. logoutUrl 보다 우선적이다
+				// Method 를 지정하지 않으면 logout URL이 어떤 HTTP 메서드로든 요청될 때 로그아웃할 수 있다
+     .logoutSuccessUrl("/logoutSuccess") // 로그아웃이 발생한 후 리다이렉션 될 URL이다. 기본값은 ＂/login?logout＂
+     .logoutSuccessHandler((request, response, authentication) -> { // 사용할 LogoutSuccessHandler 를 설정
+          response.sendRedirect("/logoutSuccess"); // 이것이 지정되면 logoutSuccessUrl(String)은 무시된다
+     })
+     .deleteCookies("JSESSIONID“, “CUSTOM_COOKIE”) // 로그아웃 성공 시 제거될 쿠키의 이름을 지정할 수 있다
+     .invalidateHttpSession(true) // HttpSession을 무효화해야 하는 경우 true (기본값), 그렇지 않으면 false
+     .clearAuthentication(true) // 로그아웃 시 SecurityContextLogoutHandler가 인증(Authentication) 삭제 여부를 명시한다
+     .addLogoutHandler((request, response, authentication) -> {}) // 기존의 로그아웃 핸들러 뒤에 새로운 LogoutHandler를 추가한다
+     .permitAll() // logoutUrl(), RequestMatcher() 의 URL에 대한 모든 사용자의 접근을 허용
+```
+
+### LogoutFilter
+
+![image](/images/lecture/spring-security-s3-17.png)
+
+## 요청 캐시
+![image](/images/lecture/spring-security-s3-20.png)
+
+### RequestCache
+![image](/images/lecture/spring-security-s3-18.png)
+
+- **인증되지 않은 사용자가 원래 가려고 했던 페이지를 기억해두는 저장소**
+- 인증 절차 문제로 리다이렉트된 후, 이전 요청 정보를 담고 있는 `SavedRequest` 객체를 쿠키/세션에 저장하고, 필요시 다시 가져와 실행하는 캐시 메커니즘
+
+### SavedRequest
+![image](/images/lecture/spring-security-s3-19.png)
+
+- 인증 후 사용자를 인증 이전의 원래 페이지로 안내하며, 이전 요청과 관련된 여러 정보를 저장한다.
+- HttpSession에 저장됨
+
+### requestCache() API
+- `setMatchingRequestParameterName("customParam=y")`
+    ```java
+    HttpSessionRequestCache requestCache = new HttpSessionRequestCache();
+    requestCache.setMatchingRequestParameterName("customParam=y");
+
+    http
+        .requestCache((cache) -> cache
+            .requestCache(requestCache)
+        );
+    ``` 
+    - 특정 파라미터가 전달됬을 때만 HttpSession에 저장된 SavedRequest를 꺼내겠다. (이전 페이지로 복구하겠다)
+    - 미지정시 기본값은 'continue'
+    - 의미 : `http://localhost:8080/user?customParam=y` 으로 전달되었을 때만 이전 페이지로 리다이렉트하겠다.
+    - 필요성
+        - 불필요한 세션 접근 방지: 모든 요청마다 "혹시 복구할 요청이 있나?"라고 세션을 뒤지는 것은 자원 낭비일 수 있다.
+
+- 요청을 저장하지 않으려면 `NullRequestCache` 구현을 사용한다.
+    ```java
+    HttpSessionRequestCache nullRequestCache = new NullRequestCache();
+
+    http
+        .requestCache((cache) -> cache
+            .requestCache(nullRequestCache)
+        );
+    ```
+
+### RequestCacheAwareFilter
+![image](/images/lecture/spring-security-s3-21.png)
+
+- 이전에 저장한 요청(SavedRequest)가 있다면, 현재 요청을 그 저장된 내용으로 덮어씌우는 역할을 한다.
+    - SavedRequest가 현재 Request와 일치하면 이 요청을 필터 체인의 doFilter 메소드에 전달하고, SavedRequest가 없으면 필터는 원래 Request를 그대로 진행시킨다.
+- RequestCache가 데이터를 담아두는 **저장소**라면, RequestCacheAwareFilter는 그 저장소를 실제로 뒤져서 **복구**를 수행하는 **일꾼**이다.
+
+RequestCacheAwareFilter → getMatchingRequest
+
+```java
+public class HttpSessionRequestCache implements RequestCache {
+	...
+	@Override
+	public HttpServletRequest getMatchingRequest(HttpServletRequest request, HttpServletResponse response) {
+		// matchingRequestParameterName null 체크
+		if (this.matchingRequestParameterName != null) {
+			// 쿼리 스트링과 설정된 파라미터 네임 매칭되는지 체크
+			if (!StringUtils.hasText(request.getQueryString())
+					|| !UriComponentsBuilder.fromUriString(UrlUtils.buildRequestUrl(request))
+						.build()
+						.getQueryParams()
+						.containsKey(this.matchingRequestParameterName)) {
+				this.logger.trace(
+						"matchingRequestParameterName is required for getMatchingRequest to lookup a value, but not provided");
+				return null;
+			}
+		}
+		SavedRequest saved = getRequest(request, response);
+		if (saved == null) {
+			this.logger.trace("No saved request");
+			return null;
+		}
+		if (!matchesSavedRequest(request, saved)) {
+			if (this.logger.isTraceEnabled()) {
+				this.logger.trace(LogMessage.format("Did not match request %s to the saved one %s",
+						UrlUtils.buildRequestUrl(request), saved));
+			}
+			return null;
+		}
+		removeRequest(request, response);
+		if (this.logger.isDebugEnabled()) {
+			this.logger.debug(LogMessage.format("Loaded matching saved request %s", saved.getRedirectUrl()));
+		}
+		return new SavedRequestAwareWrapper(saved, request);
+	}
+```
+
+RequestCacheAwareFilter에서 savedRequest `null` 체크 확인
+
+```java
+public class RequestCacheAwareFilter extends GenericFilterBean {
+	...
+	@Override
+	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+			throws IOException, ServletException {
+		HttpServletRequest wrappedSavedRequest = this.requestCache.getMatchingRequest((HttpServletRequest) request,
+				(HttpServletResponse) response);
+		chain.doFilter((wrappedSavedRequest != null) ? wrappedSavedRequest : request, response);
+	}
 ```
 
 
