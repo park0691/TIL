@@ -21,7 +21,8 @@ export default defineUserConfig({
             children: [
               'spring-security-v6/section-02',
               'spring-security-v6/section-03',
-              'spring-security-v6/section-04'
+              'spring-security-v6/section-04',
+              'spring-security-v6/section-05'
             ],
           },
         ]
