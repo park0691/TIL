@@ -22,7 +22,8 @@ export default defineUserConfig({
               'spring-security-v6/section-02',
               'spring-security-v6/section-03',
               'spring-security-v6/section-04',
-              'spring-security-v6/section-05'
+              'spring-security-v6/section-05',
+              'spring-security-v6/section-06'
             ],
           },
         ]
